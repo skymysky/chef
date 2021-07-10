@@ -1,7 +1,7 @@
 #--
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Christopher Walters
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-require "chef/exceptions"
+require_relative "../exceptions"
 
 class Chef
   module DSL
@@ -41,6 +41,7 @@ class Chef
       #
       def with_run_context(rc)
         raise ArgumentError, "with_run_context is useless without a block" unless block_given?
+
         old_run_context = @run_context
         @run_context =
           case rc
@@ -68,7 +69,7 @@ class Chef
       # @return [Chef::Resource] The resource
       #
       # @example
-      #   delete_resource!(:template, '/x/y.txy')
+      #   delete_resource!(:template, '/x/y.txt')
       #
       def delete_resource!(type, name, run_context: self.run_context)
         run_context.resource_collection.delete("#{type}[#{name}]").tap do |resource|
@@ -92,7 +93,7 @@ class Chef
       # @return [Chef::Resource] The resource
       #
       # @example
-      #   delete_resource(:template, '/x/y.txy')
+      #   delete_resource(:template, '/x/y.txt')
       #
       def delete_resource(type, name, run_context: self.run_context)
         delete_resource!(type, name, run_context: run_context)
@@ -113,7 +114,7 @@ class Chef
       # @return [Chef::Resource] The updated resource
       #
       # @example
-      #   edit_resource!(:template, '/x/y.txy') do
+      #   edit_resource!(:template, '/x/y.txt') do
       #     cookbook_name: cookbook_name
       #   end
       #
@@ -146,24 +147,16 @@ class Chef
       # @return [Chef::Resource] The updated or created resource
       #
       # @example
-      #   resource = edit_resource(:template, '/x/y.txy') do
-      #     source "y.txy.erb"
+      #   resource = edit_resource(:template, '/x/y.txt') do
+      #     source "y.txt.erb"
       #     variables {}
       #   end
-      #   resource.variables.merge!({ home: "/home/klowns"  })
+      #   resource.variables.merge!({ home: "/home/clowns"  })
       #
       def edit_resource(type, name, created_at: nil, run_context: self.run_context, &resource_attrs_block)
         edit_resource!(type, name, created_at: created_at, run_context: run_context, &resource_attrs_block)
       rescue Chef::Exceptions::ResourceNotFound
-        resource = declare_resource(type, name, created_at: created_at, run_context: run_context)
-        if resource_attrs_block
-          if defined?(new_resource)
-            resource.instance_exec(new_resource, &resource_attrs_block)
-          else
-            resource.instance_exec(&resource_attrs_block)
-          end
-        end
-        resource
+        declare_resource(type, name, created_at: created_at, run_context: run_context, &resource_attrs_block)
       end
 
       # Find existing resources by searching the list of existing resources.  Possible
@@ -198,10 +191,11 @@ class Chef
       # @return [Chef::Resource] The updated resource
       #
       # @example
-      #   resource = find_resource!(:template, '/x/y.txy')
+      #   resource = find_resource!(:template, '/x/y.txt')
       #
       def find_resource!(type, name, run_context: self.run_context)
         raise ArgumentError, "find_resource! does not take a block" if block_given?
+
         run_context.resource_collection.find(type => name)
       end
 
@@ -217,7 +211,7 @@ class Chef
       # @return [Chef::Resource] The updated resource
       #
       # @example
-      #   if ( find_resource(:template, '/x/y.txy') )
+      #   if ( find_resource(:template, '/x/y.txt') )
       #     # do something
       #   else
       #     # don't worry about the error
@@ -257,7 +251,7 @@ class Chef
       # @return [Chef::Resource] The new resource.
       #
       # @example
-      #   declare_resource(:file, '/x/y.txy', caller[0]) do
+      #   declare_resource(:file, '/x/y.txt', caller[0]) do
       #     action :delete
       #   end
       #   # Equivalent to
@@ -265,10 +259,10 @@ class Chef
       #     action :delete
       #   end
       #
-      def declare_resource(type, name, created_at: nil, run_context: self.run_context, &resource_attrs_block)
+      def declare_resource(type, name, created_at: nil, run_context: self.run_context, enclosing_provider: nil, &resource_attrs_block)
         created_at ||= caller[0]
 
-        resource = build_resource(type, name, created_at: created_at, &resource_attrs_block)
+        resource = build_resource(type, name, created_at: created_at, enclosing_provider: enclosing_provider, &resource_attrs_block)
 
         run_context.resource_collection.insert(resource, resource_type: resource.declared_type, instance_name: resource.name)
         resource
@@ -291,16 +285,20 @@ class Chef
       # @return [Chef::Resource] The new resource.
       #
       # @example
-      #   build_resource(:file, '/x/y.txy', caller[0]) do
+      #   build_resource(:file, '/x/y.txt', caller[0]) do
       #     action :delete
       #   end
       #
-      def build_resource(type, name, created_at: nil, run_context: self.run_context, &resource_attrs_block)
+      def build_resource(type, name, created_at: nil, run_context: self.run_context, enclosing_provider: nil, &resource_attrs_block)
         created_at ||= caller[0]
 
         # this needs to be lazy in order to avoid circular dependencies since ResourceBuilder
         # will requires the entire provider+resolver universe
-        require "chef/resource_builder" unless defined?(Chef::ResourceBuilder)
+        require_relative "../resource_builder" unless defined?(Chef::ResourceBuilder)
+
+        enclosing_provider ||= self if is_a?(Chef::Provider)
+
+        nr = new_resource if defined?(new_resource)
 
         Chef::ResourceBuilder.new(
           type:                type,
@@ -310,7 +308,8 @@ class Chef
           run_context:         run_context,
           cookbook_name:       cookbook_name,
           recipe_name:         recipe_name,
-          enclosing_provider:  is_a?(Chef::Provider) ? self : nil
+          enclosing_provider:  enclosing_provider,
+          new_resource:        nr
         ).build(&resource_attrs_block)
       end
 

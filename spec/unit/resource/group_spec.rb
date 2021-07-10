@@ -1,7 +1,7 @@
 #
-# Author:: AJ Christensen (<aj@chef.io>)
+# Author:: AJ Christensen (<aj@junglistheavy.industries>)
 # Author:: Tyler Cloke (<tyler@chef.io>);
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,6 +49,10 @@ describe Chef::Resource::Group, "initialize" do
     expect(resource.members).to eql([])
   end
 
+  it "defaults comment to be nil" do
+    expect(resource.comment).to eql(nil)
+  end
+
   it "aliases users to members, also an empty array" do
     expect(resource.users).to eql([])
   end
@@ -72,7 +76,7 @@ describe Chef::Resource::Group, "group_name" do
   end
 
   it "does not allow a hash" do
-    expect { resource.send(:group_name, { :aj => "is freakin awesome" }) }.to raise_error(ArgumentError)
+    expect { resource.send(:group_name, { some_other_user: "is freakin awesome" }) }.to raise_error(ArgumentError)
   end
 end
 
@@ -85,31 +89,31 @@ describe Chef::Resource::Group, "gid" do
   end
 
   it "does not allow a hash" do
-    expect { resource.send(:gid, { :aj => "is freakin awesome" }) }.to raise_error(ArgumentError)
+    expect { resource.send(:gid, { some_other_user: "is freakin awesome" }) }.to raise_error(ArgumentError)
   end
 end
 
 describe Chef::Resource::Group, "members" do
   let(:resource) { Chef::Resource::Group.new("fakey_fakerton") }
 
-  [ :users, :members].each do |method|
-    it "(#{method}) allows and convert a string" do
-      resource.send(method, "aj")
-      expect(resource.send(method)).to eql(["aj"])
+  %i{users members}.each do |method|
+    it "(#{method}) allows a String and coerces it to an Array" do
+      resource.send(method, "some_user")
+      expect(resource.send(method)).to eql(["some_user"])
     end
 
-    it "(#{method}) should split a string on commas" do
-      resource.send(method, "aj,adam")
-      expect(resource.send(method)).to eql( %w{aj adam} )
+    it "(#{method}) coerces a comma separated list of users to an Array" do
+      resource.send(method, "some_user, other_user ,another_user,just_one_more_user")
+      expect(resource.send(method)).to eql( %w{some_user other_user another_user just_one_more_user} )
     end
 
-    it "(#{method}) allows an array" do
-      resource.send(method, %w{aj adam})
-      expect(resource.send(method)).to eql( %w{aj adam} )
+    it "(#{method}) allows an Array" do
+      resource.send(method, %w{some_user other_user})
+      expect(resource.send(method)).to eql( %w{some_user other_user} )
     end
 
-    it "(#{method}) does not allow a hash" do
-      expect { resource.send(method, { :aj => "is freakin awesome" }) }.to raise_error(ArgumentError)
+    it "(#{method}) does not allow a Hash" do
+      expect { resource.send(method, { some_user: "is freakin awesome" }) }.to raise_error(ArgumentError)
     end
   end
 end
@@ -127,7 +131,7 @@ describe Chef::Resource::Group, "append" do
   end
 
   it "does not allow a hash" do
-    expect { resource.send(:gid, { :aj => "is freakin awesome" }) }.to raise_error(ArgumentError)
+    expect { resource.send(:gid, { some_other_user: "is freakin awesome" }) }.to raise_error(ArgumentError)
   end
 
   describe "when it has members" do
@@ -144,5 +148,18 @@ describe Chef::Resource::Group, "append" do
     it "returns the group name as its identity" do
       expect(resource.identity).to eq("pokemon")
     end
+  end
+end
+
+describe Chef::Resource::Group, "comment" do
+  let(:resource) { Chef::Resource::Group.new("fakey_fakerton") }
+
+  it "allows an string" do
+    resource.comment "this is a group comment"
+    expect(resource.comment).to eql("this is a group comment")
+  end
+
+  it "does not allow a hash" do
+    expect { resource.send(:comment, { some_other_user: "is freakin awesome" }) }.to raise_error(ArgumentError)
   end
 end

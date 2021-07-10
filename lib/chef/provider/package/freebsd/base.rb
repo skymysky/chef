@@ -19,9 +19,9 @@
 # limitations under the License.
 #
 
-require "chef/resource/package"
-require "chef/provider/package"
-require "chef/mixin/get_source_from_package"
+require_relative "../../../resource/package"
+require_relative "../../package"
+require_relative "../../../mixin/get_source_from_package"
 
 class Chef
   class Provider
@@ -37,28 +37,31 @@ class Chef
             case port
 
             # When the package name starts with a '/' treat it as the full path to the ports directory.
-            when /^\//
+            when %r{^/}
               port
 
             # Otherwise if the package name contains a '/' not at the start (like 'www/wordpress') treat
             # as a relative path from /usr/ports.
-            when /\//
+            when %r{/}
               "/usr/ports/#{port}"
 
             # Otherwise look up the path to the ports directory using 'whereis'
             else
-              whereis = shell_out_compact_timeout!("whereis", "-s", port, env: nil)
+              whereis = shell_out!("whereis", "-s", port, env: nil)
               unless path = whereis.stdout[/^#{Regexp.escape(port)}:\s+(.+)$/, 1]
                 raise Chef::Exceptions::Package, "Could not find port with the name #{port}"
               end
+
               path
             end
           end
 
           def makefile_variable_value(variable, dir = nil)
             options = dir ? { cwd: dir } : {}
-            make_v = shell_out_compact_timeout!("make", "-V", variable, options.merge!(env: nil, returns: [0, 1]))
-            make_v.exitstatus == 0 ? make_v.stdout.strip.split($OUTPUT_RECORD_SEPARATOR).first : nil # $\ is the line separator, i.e. newline.
+            options[:env] = nil
+            options[:returns] = [0, 1]
+            make_v = shell_out!("make", "-V", variable, **options)
+            make_v.exitstatus == 0 ? make_v.stdout.strip.split($OUTPUT_RECORD_SEPARATOR).first : nil
           end
         end
 

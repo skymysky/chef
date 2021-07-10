@@ -1,6 +1,6 @@
 #
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2012-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,12 +16,12 @@
 # limitations under the License.
 #
 
-require "set"
-require "chef/log"
-require "chef/recipe"
-require "chef/resource/lwrp_base"
-require "chef/provider/lwrp_base"
-require "chef/resource_definition_list"
+autoload :Set, "set"
+require_relative "../log"
+require_relative "../recipe"
+require_relative "../resource/lwrp_base"
+require_relative "../provider/lwrp_base"
+require_relative "../resource_definition_list"
 
 class Chef
   class RunContext
@@ -100,7 +100,15 @@ class Chef
       def compile_libraries
         @events.library_load_start(count_files_by_segment(:libraries))
         cookbook_order.each do |cookbook|
-          load_libraries_from_cookbook(cookbook)
+          eager_load_libraries = cookbook_collection[cookbook].metadata.eager_load_libraries
+          if eager_load_libraries == true # actually true, not truthy
+            load_libraries_from_cookbook(cookbook)
+          else
+            $LOAD_PATH.unshift File.expand_path("libraries", cookbook_collection[cookbook].root_dir)
+            if eager_load_libraries # we have a String or Array<String> and not false
+              load_libraries_from_cookbook(cookbook, eager_load_libraries)
+            end
+          end
         end
         @events.library_load_complete
       end
@@ -161,17 +169,17 @@ class Chef
       def compile_recipes
         @events.recipe_load_start(run_list_expansion.recipes.size)
         run_list_expansion.recipes.each do |recipe|
-          begin
-            path = resolve_recipe(recipe)
-            @run_context.load_recipe(recipe)
-            @events.recipe_file_loaded(path, recipe)
-          rescue Chef::Exceptions::RecipeNotFound => e
-            @events.recipe_not_found(e)
-            raise
-          rescue Exception => e
-            @events.recipe_file_load_failed(path, e, recipe)
-            raise
-          end
+
+          path = resolve_recipe(recipe)
+          @run_context.load_recipe(recipe)
+          @events.recipe_file_loaded(path, recipe)
+        rescue Chef::Exceptions::RecipeNotFound => e
+          @events.recipe_not_found(e)
+          raise
+        rescue Exception => e
+          @events.recipe_file_load_failed(path, e, recipe)
+          raise
+
         end
         @events.recipe_load_complete
       end
@@ -206,13 +214,14 @@ class Chef
         end
 
         list_of_attr_files.each do |filename|
+          next unless File.extname(filename) == ".rb"
+
           load_attribute_file(cookbook_name.to_s, filename)
         end
       end
 
       def load_attribute_file(cookbook_name, filename)
-        # FIXME(log): should be trace
-        logger.debug("Node #{node.name} loading cookbook #{cookbook_name}'s attribute file #{filename}")
+        logger.trace("Node #{node.name} loading cookbook #{cookbook_name}'s attribute file #{filename}")
         attr_file_basename = ::File.basename(filename, ".rb")
         node.include_attribute("#{cookbook_name}::#{attr_file_basename}")
       rescue Exception => e
@@ -220,33 +229,36 @@ class Chef
         raise
       end
 
-      def load_libraries_from_cookbook(cookbook_name)
-        files_in_cookbook_by_segment(cookbook_name, :libraries).each do |filename|
-          next unless File.extname(filename) == ".rb"
-          begin
-            # FIXME(log): should be trace
-            logger.debug("Loading cookbook #{cookbook_name}'s library file: #{filename}")
-            Kernel.load(filename)
-            @events.library_file_loaded(filename)
-          rescue Exception => e
-            @events.library_file_load_failed(filename, e)
-            raise
-          end
+      def load_libraries_from_cookbook(cookbook_name, globs = "**/*.rb")
+        each_file_in_cookbook_by_segment(cookbook_name, :libraries, globs) do |filename|
+
+          logger.trace("Loading cookbook #{cookbook_name}'s library file: #{filename}")
+          Kernel.require(filename)
+          @events.library_file_loaded(filename)
+        rescue Exception => e
+          @events.library_file_load_failed(filename, e)
+          raise
+
         end
       end
 
       def load_lwrps_from_cookbook(cookbook_name)
         files_in_cookbook_by_segment(cookbook_name, :providers).each do |filename|
+          next unless File.extname(filename) == ".rb"
+          next if File.basename(filename).match?(/^_/)
+
           load_lwrp_provider(cookbook_name, filename)
         end
         files_in_cookbook_by_segment(cookbook_name, :resources).each do |filename|
+          next unless File.extname(filename) == ".rb"
+          next if File.basename(filename).match?(/^_/)
+
           load_lwrp_resource(cookbook_name, filename)
         end
       end
 
       def load_lwrp_provider(cookbook_name, filename)
-        # FIXME(log): should be trace
-        logger.debug("Loading cookbook #{cookbook_name}'s providers from #{filename}")
+        logger.trace("Loading cookbook #{cookbook_name}'s providers from #{filename}")
         Chef::Provider::LWRPBase.build_from_file(cookbook_name, filename, self)
         @events.lwrp_file_loaded(filename)
       rescue Exception => e
@@ -255,8 +267,7 @@ class Chef
       end
 
       def load_lwrp_resource(cookbook_name, filename)
-        # FIXME(log): should be trace
-        logger.debug("Loading cookbook #{cookbook_name}'s resources from #{filename}")
+        logger.trace("Loading cookbook #{cookbook_name}'s resources from #{filename}")
         Chef::Resource::LWRPBase.build_from_file(cookbook_name, filename, self)
         @events.lwrp_file_loaded(filename)
       rescue Exception => e
@@ -269,8 +280,7 @@ class Chef
         files_in_cookbook_by_segment(cookbook_name, :ohai).each do |filename|
           next unless File.extname(filename) == ".rb"
 
-          # FIXME(log): should be trace
-          logger.debug "Loading Ohai plugin: #{filename} from #{cookbook_name}"
+          logger.trace "Loading Ohai plugin: #{filename} from #{cookbook_name}"
           target_name = File.join(target, cookbook_name.to_s, File.basename(filename))
 
           FileUtils.mkdir_p(File.dirname(target_name))
@@ -280,9 +290,10 @@ class Chef
 
       def load_resource_definitions_from_cookbook(cookbook_name)
         files_in_cookbook_by_segment(cookbook_name, :definitions).each do |filename|
+          next unless File.extname(filename) == ".rb"
+
           begin
-            # FIXME(log): should be trace
-            logger.debug("Loading cookbook #{cookbook_name}'s definitions from #{filename}")
+            logger.trace("Loading cookbook #{cookbook_name}'s definitions from #{filename}")
             resourcelist = Chef::ResourceDefinitionList.new
             resourcelist.from_file(filename)
             definitions.merge!(resourcelist.defines) do |key, oldval, newval|
@@ -314,7 +325,7 @@ class Chef
 
       def count_files_by_segment(segment, root_alias = nil)
         cookbook_collection.inject(0) do |count, cookbook_by_name|
-          count + cookbook_by_name[1].segment_filenames(segment).size + (root_alias ? cookbook_by_name[1].files_for(:root_files).select { |record| record[:name] == root_alias }.size : 0)
+          count + cookbook_by_name[1].segment_filenames(segment).size + (root_alias ? cookbook_by_name[1].files_for(:root_files).count { |record| record[:name] == root_alias } : 0)
         end
       end
 
@@ -324,11 +335,27 @@ class Chef
         cookbook_collection[cookbook].files_for(segment).map { |record| record[:full_path] }.sort
       end
 
+      # Iterates through all files in given cookbook segment, yielding the full path to the file
+      # if it matches one of the given globs.  Returns matching files in lexical sort order.  Supports
+      # extended globbing.  The segment should not be included in the glob.
+      #
+      def each_file_in_cookbook_by_segment(cookbook, segment, globs)
+        cookbook_collection[cookbook].files_for(segment).sort_by { |record| record[:path] }.each do |record|
+          Array(globs).each do |glob|
+            target = record[:path].delete_prefix("#{segment}/")
+            if File.fnmatch(glob, target, File::FNM_PATHNAME | File::FNM_EXTGLOB | File::FNM_DOTMATCH)
+              yield record[:full_path]
+              break
+            end
+          end
+        end
+      end
+
       # Yields the name, as a symbol, of each cookbook depended on by
       # +cookbook_name+ in lexical sort order.
       def each_cookbook_dep(cookbook_name, &block)
         cookbook = cookbook_collection[cookbook_name]
-        cookbook.metadata.dependencies.keys.sort.map { |x| x.to_sym }.each(&block)
+        cookbook.metadata.dependencies.keys.sort.map(&:to_sym).each(&block)
       end
 
       # Given a +recipe_name+, finds the file associated with the recipe.

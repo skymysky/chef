@@ -1,6 +1,6 @@
 #
 # Author:: Nimisha Sharad (<nimisha.sharad@msystechnologies.com>)
-# Copyright:: Copyright 2008-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,31 +16,51 @@
 # limitations under the License.
 #
 
-require "chef/resource/package"
-require "chef/mixin/uris"
+require_relative "package"
+require_relative "../mixin/uris"
 
 class Chef
   class Resource
     class MsuPackage < Chef::Resource::Package
       include Chef::Mixin::Uris
+      unified_mode true
 
-      resource_name :msu_package
       provides :msu_package
 
-      description "Use the msu_package resource to install Microsoft Update(MSU) packages on Microsoft Windows machines."
+      description "Use the **msu_package** resource to install Microsoft Update(MSU) packages on Microsoft Windows machines."
       introduced "12.17"
 
       allowed_actions :install, :remove
       default_action :install
 
+      property :package_name, String,
+        description: "An optional property to set the package name if it differs from the resource block's name.",
+        identity: true
+
+      # This is the same property as the main package resource except it has the skip docs set to true
+      # This resource abuses the package resource by storing the versions of all the cabs in the MSU file
+      # in the version attribute from load current value even though those aren't technically the version of the
+      # msu. Since the user wouldn't actually set this we don't want it on the docs site.
+      property :version, [String, Array],
+        skip_docs: true,
+        description: "The version of a package to be installed or upgraded."
+
       property :source, String,
-                coerce: (proc do |s|
-                  unless s.nil?
-                    uri_scheme?(s) ? s : Chef::Util::PathHelper.canonical_path(s, false)
-                  end
-                end),
-                default: lazy { |r| r.package_name }
-      property :checksum, String, desired_state: false
+        description: "The local file path or URL for the MSU package.",
+        coerce: (proc do |s|
+          unless s.nil?
+            uri_scheme?(s) ? s : Chef::Util::PathHelper.canonical_path(s, false)
+          end
+        end),
+        default: lazy { package_name }
+
+      property :checksum, String, desired_state: false,
+               description: "SHA-256 digest used to verify the checksum of the downloaded MSU package."
+
+      property :timeout, [String, Integer],
+        default: 3600,
+        description: "The amount of time (in seconds) to wait before timing out.",
+        desired_state: false
     end
   end
 end

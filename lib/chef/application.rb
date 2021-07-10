@@ -1,7 +1,7 @@
 #
 # Author:: AJ Christensen (<aj@chef.io>)
 # Author:: Mark Mzyk (mmzyk@chef.io)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,18 +16,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "pp"
-require "socket"
-require "chef/config"
-require "chef/config_fetcher"
-require "chef/exceptions"
-require "chef/local_mode"
-require "chef/log"
-require "chef/platform"
-require "mixlib/cli"
-require "tmpdir"
-require "rbconfig"
-require "chef/application/exit_code"
+require "pp" unless defined?(PP)
+require "socket" unless defined?(Socket)
+require_relative "config"
+require_relative "exceptions"
+require_relative "local_mode"
+require_relative "log"
+require_relative "platform"
+require "mixlib/cli" unless defined?(Mixlib::CLI)
+require "tmpdir" unless defined?(Dir.mktmpdir)
+require "rbconfig" unless defined?(RbConfig)
+require_relative "application/exit_code"
+require "chef-utils" unless defined?(ChefUtils::CANARY)
+module LicenseAcceptance
+  autoload :Acceptor, "license_acceptance/acceptor"
+end
 
 class Chef
   class Application
@@ -38,9 +41,6 @@ class Chef
 
       @chef_client = nil
       @chef_client_json = nil
-
-      # Always switch to a readable directory. Keeps subsequent Dir.chdir() {}
-      # from failing due to permissions when launched as a less privileged user.
     end
 
     # Configure mixlib-cli to always separate defaults from user-supplied CLI options
@@ -59,10 +59,11 @@ class Chef
     end
 
     # Get this party started
-    def run
+    def run(enforce_license: false)
       setup_signal_handlers
       reconfigure
       setup_application
+      check_license_acceptance if enforce_license
       run_application
     end
 
@@ -75,7 +76,7 @@ class Chef
         Chef::Application.fatal!("SIGTERM received, stopping", Chef::Exceptions::SigTerm.new)
       end
 
-      unless Chef::Platform.windows?
+      unless ChefUtils.windows?
         trap("QUIT") do
           logger.info("SIGQUIT received, call stack:\n  " + caller.join("\n  "))
         end
@@ -94,7 +95,11 @@ class Chef
     # Parse configuration (options and config file)
     def configure_chef
       parse_options
-      load_config_file
+      begin
+        load_config_file
+      rescue Exception => e
+        Chef::Application.fatal!(e.message, Chef::Exceptions::ConfigurationError.new)
+      end
       chef_config.export_proxies
       chef_config.init_openssl
       File.umask chef_config[:umask]
@@ -116,6 +121,7 @@ class Chef
 
     # @api private (test injection)
     def chef_configfetcher
+      require_relative "config_fetcher"
       Chef::ConfigFetcher
     end
 
@@ -132,10 +138,10 @@ class Chef
       config[:config_file] = config_fetcher.expanded_path
 
       if config[:config_file].nil?
-        logger.warn("No config file found or specified on command line, using command line options.")
+        logger.warn("No config file found or specified on command line. Using command line options instead.")
       elsif config_fetcher.config_missing?
         logger.warn("*****************************************")
-        logger.warn("Did not find config file: #{config[:config_file]}, using command line options.")
+        logger.warn("Did not find config file: #{config[:config_file]}. Using command line options instead.")
         logger.warn("*****************************************")
       else
         config_content = config_fetcher.read_config
@@ -148,39 +154,26 @@ class Chef
 
     def apply_extra_config_options(extra_config_options)
       chef_config.apply_extra_config_options(extra_config_options)
-    rescue ChefConfig::UnparsableConfigOption => e
-      Chef::Application.fatal!(e.message)
     end
 
+    # Set the specific recipes to Chef::Config if the recipes are valid
+    # otherwise log a fatal error message and exit the application.
     def set_specific_recipes
-      if cli_arguments.respond_to?(:map)
+      if cli_arguments.is_a?(Array) &&
+          (cli_arguments.empty? || cli_arguments.all? { |file| File.file?(file) } )
         chef_config[:specific_recipes] =
           cli_arguments.map { |file| File.expand_path(file) }
+      else
+        Chef::Application.fatal!("Invalid argument; could not find the following recipe files: \"" +
+          cli_arguments.select { |file| !File.file?(file) }.join('", "') + '"')
       end
     end
 
-    # Initialize and configure the logger.
-    # === Loggers and Formatters
-    # In Chef 10.x and previous, the Logger was the primary/only way that Chef
-    # communicated information to the user. In Chef 10.14, a new system, "output
-    # formatters" was added, and in Chef 11.0+ it is the default when running
-    # chef in a console (detected by `STDOUT.tty?`). Because output formatters
-    # are more complex than the logger system and users have less experience with
-    # them, the config option `force_logger` is provided to restore the Chef 10.x
-    # behavior.
-    #
-    # Conversely, for users who want formatter output even when chef is running
-    # unattended, the `force_formatter` option is provided.
-    #
-    # === Auto Log Level
-    # The `log_level` of `:auto` means `:warn` in the formatter and `:info` in
-    # the logger.
-    #
     def configure_logging
       configure_log_location
-      logger.init(MonoLogger.new(chef_config[:log_location]))
-      if want_additional_logger?
-        configure_stdout_logger
+      logger.init(MonoLogger.new(chef_config[:log_location][0]))
+      chef_config[:log_location][1..].each do |log_location|
+        logger.loggers << MonoLogger.new(log_location)
       end
       logger.level = resolve_log_level
     rescue StandardError => error
@@ -188,30 +181,40 @@ class Chef
       Chef::Application.fatal!("Aborting due to invalid 'log_location' configuration", error)
     end
 
-    # Turn `log_location :syslog` and `log_location :win_evt` into the
-    # appropriate loggers.
+    # merge Chef::Config[:log_location] and config[:log_location_cli]
+    #   - the nil default value of log_location_cli means STDOUT
+    #   - the nil default value of log_location is removed
+    #   - Arrays are supported
+    #   - syslog + winevt are converted to those specific logger objects
+    #
     def configure_log_location
-      log_location = chef_config[:log_location]
-      return unless log_location.respond_to?(:to_sym)
+      log_location_cli = [ config[:log_location_cli] ].flatten.map { |log_location| log_location.nil? ? STDOUT : log_location }
 
-      chef_config[:log_location] =
-        case log_location.to_sym
-          when :syslog then logger::Syslog.new
-          when :win_evt then logger::WinEvt.new
-          else log_location # Probably a path; let MonoLogger sort it out
+      chef_config[:log_location] = [ chef_config[:log_location], log_location_cli ].flatten.compact.uniq
+
+      chef_config[:log_location].map! do |log_location|
+        case log_location
+        when :syslog, "syslog"
+          force_force_logger
+          logger::Syslog.new
+        when :win_evt, "win_evt"
+          force_force_logger
+          logger::WinEvt.new
+        else
+          # should be a path or STDOUT
+          log_location
         end
+      end
     end
 
-    # Based on config and whether or not STDOUT is a tty, should we setup a
-    # secondary logger for stdout?
-    def want_additional_logger?
-      !( chef_config[:log_location].is_a?(IO) && chef_config[:log_location].tty? ) && !chef_config[:daemonize]
-    end
-
-    def configure_stdout_logger
-      stdout_logger = MonoLogger.new(STDOUT)
-      stdout_logger.formatter = logger.logger.formatter
-      logger.loggers << stdout_logger
+    # Force the logger by default for the :winevt and :syslog loggers.  Since we do not and cannot
+    # support multiple log levels in a mix-and-match situation with formatters and loggers, and the
+    # formatters do not support syslog, we force the formatter off by default and the log level is
+    # thus info by default.  Users can add `--force-formatter -l info` to get back formatter output
+    # on STDOUT along with syslog logging.
+    #
+    def force_force_logger
+      chef_config[:force_logger] = true unless chef_config[:force_formatter]
     end
 
     # Use of output formatters is assumed if `force_formatter` is set or if `force_logger` is not set
@@ -219,19 +222,10 @@ class Chef
       chef_config[:force_formatter] || !chef_config[:force_logger]
     end
 
-    def auto_log_level?
-      chef_config[:log_level] == :auto
-    end
-
-    # if log_level is `:auto`, convert it to :warn (when using output formatter)
-    # or :info (no output formatter). See also +using_output_formatter?+
+    # The :auto formatter defaults to :warn with the formatter and :info with the logger
     def resolve_log_level
-      if auto_log_level?
-        if using_output_formatter?
-          :warn
-        else
-          :info
-        end
+      if chef_config[:log_level] == :auto
+        using_output_formatter? ? :warn : :info
       else
         chef_config[:log_level]
       end
@@ -247,6 +241,15 @@ class Chef
       raise Chef::Exceptions::Application, "#{self}: you must override setup_application"
     end
 
+    def check_license_acceptance
+      LicenseAcceptance::Acceptor.check_and_persist!(
+        "infra-client",
+        Chef::VERSION.to_s,
+        logger: logger,
+        provided: Chef::Config[:chef_license]
+      )
+    end
+
     # Actually run the application
     def run_application
       raise Chef::Exceptions::Application, "#{self}: you must override run_application"
@@ -260,7 +263,6 @@ class Chef
 
       Chef::LocalMode.with_server_connectivity do
         override_runlist = config[:override_runlist]
-        override_runlist ||= [] if specific_recipes.size > 0
         @chef_client = Chef::Client.new(
           @chef_client_json,
           override_runlist: override_runlist,
@@ -288,7 +290,7 @@ class Chef
       # win32-process gem exposes some form of :fork for Process
       # class. So we are separately ensuring that the platform we're
       # running on is not windows before forking.
-      chef_config[:client_fork] && Process.respond_to?(:fork) && !Chef::Platform.windows?
+      chef_config[:client_fork] && Process.respond_to?(:fork) && !ChefUtils.windows?
     end
 
     # Run chef-client once and then exit. If TERM signal is received, ignores the
@@ -305,16 +307,16 @@ class Chef
     end
 
     def fork_chef_client
-      logger.info "Forking chef instance to converge..."
+      logger.info "Forking #{ChefUtils::Dist::Infra::PRODUCT} instance to converge..."
       pid = fork do
         # Want to allow forked processes to finish converging when
-        # TERM singal is received (exit gracefully)
+        # TERM signal is received (exit gracefully)
         trap("TERM") do
           logger.debug("SIGTERM received during converge," +
             " finishing converge to exit normally (send SIGINT to terminate immediately)")
         end
 
-        client_solo = chef_config[:solo] ? "chef-solo" : "chef-client"
+        client_solo = chef_config[:solo] ? ChefUtils::Dist::Solo::EXEC : ChefUtils::Dist::Infra::CLIENT
         $0 = "#{client_solo} worker: ppid=#{Process.ppid};start=#{Time.new.strftime("%R:%S")};"
         begin
           logger.trace "Forked instance now converging"
@@ -326,7 +328,7 @@ class Chef
           exit 0
         end
       end
-      logger.trace "Fork successful. Waiting for new chef pid: #{pid}"
+      logger.trace "Fork successful. Waiting for new #{ChefUtils::Dist::Infra::CLIENT} pid: #{pid}"
       result = Process.waitpid2(pid)
       handle_child_exit(result)
       logger.trace "Forked instance successfully reaped (pid: #{pid})"
@@ -336,10 +338,11 @@ class Chef
     def handle_child_exit(pid_and_status)
       status = pid_and_status[1]
       return true if status.success?
+
       message = if status.signaled?
-                  "Chef run process terminated by signal #{status.termsig} (#{Signal.list.invert[status.termsig]})"
+                  "#{ChefUtils::Dist::Infra::PRODUCT} run process terminated by signal #{status.termsig} (#{Signal.list.invert[status.termsig]})"
                 else
-                  "Chef run process exited unsuccessfully (exit code #{status.exitstatus})"
+                  "#{ChefUtils::Dist::Infra::PRODUCT} run process exited unsuccessfully (exit code #{status.exitstatus})"
                 end
       raise Exceptions::ChildConvergeError, message
     end
@@ -350,7 +353,8 @@ class Chef
       logger.fatal("Configuration error #{error.class}: #{error.message}")
       filtered_trace = error.backtrace.grep(/#{Regexp.escape(config_file_path)}/)
       filtered_trace.each { |line| logger.fatal("  " + line ) }
-      Chef::Application.fatal!("Aborting due to error in '#{config_file_path}'", error)
+      raise Chef::Exceptions::ConfigurationError.new("Aborting due to error in '#{config_file_path}': #{error}")
+      # Chef::Application.fatal!("Aborting due to error in '#{config_file_path}'", Chef::Exceptions::ConfigurationError.new(error))
     end
 
     # This is a hook for testing
@@ -371,10 +375,14 @@ class Chef
         chef_stacktrace_out = "Generated at #{Time.now}\n"
         chef_stacktrace_out += message
 
-        Chef::FileCache.store("chef-stacktrace.out", chef_stacktrace_out)
-        logger.fatal("Stacktrace dumped to #{Chef::FileCache.load("chef-stacktrace.out", false)}")
+        Chef::FileCache.store("#{ChefUtils::Dist::Infra::SHORT}-stacktrace.out", chef_stacktrace_out)
+        logger.fatal("Stacktrace dumped to #{Chef::FileCache.load("#{ChefUtils::Dist::Infra::SHORT}-stacktrace.out", false)}")
         logger.fatal("Please provide the contents of the stacktrace.out file if you file a bug report")
-        logger.debug(message)
+        if Chef::Config[:always_dump_stacktrace]
+          logger.fatal(message)
+        else
+          logger.debug(message)
+        end
         true
       end
 
@@ -384,6 +392,9 @@ class Chef
 
       # Log a fatal error message to both STDERR and the Logger, exit the application
       def fatal!(msg, err = nil)
+        if Chef::Config[:always_dump_stacktrace]
+          msg << "\n#{err.backtrace.join("\n")}"
+        end
         logger.fatal(msg)
         Process.exit(normalize_exit_code(err))
       end

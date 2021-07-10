@@ -1,6 +1,6 @@
 #
 # Author:: Tim Smith (<tsmith@chef.io>)
-# Copyright:: Copyright (c) 2017 Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -85,7 +85,7 @@ describe Chef::Resource::ZypperRepository do
 
   it "accepts the legacy 'key' property" do
     resource.key "foo"
-    expect(resource.gpgkey).to eql("foo")
+    expect(resource.gpgkey).to eql(["foo"])
   end
 
   it "accepts the legacy 'uri' property" do

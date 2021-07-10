@@ -1,6 +1,6 @@
 #
 # Author:: Thom May (<thom@chef.io>)
-# Copyright:: 2016-2017, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,44 +18,42 @@
 
 require "spec_helper"
 
-# Now we are using the option --with-colons that works across old os versions
-# as well as the latest (16.10). This for both `apt-key` and `gpg` commands
-#
-# Output of the command:
-# => apt-key adv --list-public-keys --with-fingerprint --with-colons
-APT_KEY_FINGER = <<-EOF
-tru:t:1:1488924856:0:3:1:5
-pub:-:1024:17:40976EAF437D05B5:2004-09-12:::-:Ubuntu Archive Automatic Signing Key <ftpmaster@ubuntu.com>::scESC:
-fpr:::::::::630239CC130E1A7FD81A27B140976EAF437D05B5:
-sub:-:2048:16:251BEFF479164387:2004-09-12::::::e:
-pub:-:1024:17:46181433FBB75451:2004-12-30:::-:Ubuntu CD Image Automatic Signing Key <cdimage@ubuntu.com>::scSC:
-fpr:::::::::C5986B4F1257FFA86632CBA746181433FBB75451:
-pub:-:4096:1:3B4FE6ACC0B21F32:2012-05-11:::-:Ubuntu Archive Automatic Signing Key (2012) <ftpmaster@ubuntu.com>::scSC:
-fpr:::::::::790BC7277767219C42C86F933B4FE6ACC0B21F32:
-pub:-:4096:1:D94AA3F0EFE21092:2012-05-11:::-:Ubuntu CD Image Automatic Signing Key (2012) <cdimage@ubuntu.com>::scSC:
-fpr:::::::::843938DF228D22F7B3742BC0D94AA3F0EFE21092:
-EOF
+describe "Chef::Provider::AptRepository" do
+  # Now we are using the option --with-colons that works across old os versions
+  # as well as the latest (16.10). This for both `apt-key` and `gpg` commands
+  #
+  # Output of the command:
+  # => apt-key adv --list-public-keys --with-fingerprint --with-colons
+  APT_KEY_FINGER = <<~EOF.freeze
+    tru:t:1:1488924856:0:3:1:5
+    pub:-:1024:17:40976EAF437D05B5:2004-09-12:::-:Ubuntu Archive Automatic Signing Key <ftpmaster@ubuntu.com>::scESC:
+    fpr:::::::::630239CC130E1A7FD81A27B140976EAF437D05B5:
+    sub:-:2048:16:251BEFF479164387:2004-09-12::::::e:
+    pub:-:1024:17:46181433FBB75451:2004-12-30:::-:Ubuntu CD Image Automatic Signing Key <cdimage@ubuntu.com>::scSC:
+    fpr:::::::::C5986B4F1257FFA86632CBA746181433FBB75451:
+    pub:-:4096:1:3B4FE6ACC0B21F32:2012-05-11:::-:Ubuntu Archive Automatic Signing Key (2012) <ftpmaster@ubuntu.com>::scSC:
+    fpr:::::::::790BC7277767219C42C86F933B4FE6ACC0B21F32:
+    pub:-:4096:1:D94AA3F0EFE21092:2012-05-11:::-:Ubuntu CD Image Automatic Signing Key (2012) <cdimage@ubuntu.com>::scSC:
+    fpr:::::::::843938DF228D22F7B3742BC0D94AA3F0EFE21092:
+  EOF
 
-# Output of the command:
-# => gpg --with-fingerprint --with-colons [FILE]
-GPG_FINGER = <<-EOF
-pub:-:1024:17:327574EE02A818DD:2009-04-22:::-:Cloudera Apt Repository:
-fpr:::::::::F36A89E33CC1BD0F71079007327574EE02A818DD:
-sub:-:2048:16:84080586D1CA74A1:2009-04-22::::
-EOF
+  # Output of the command:
+  # => gpg --with-fingerprint --with-colons [FILE]
+  APG_GPG_FINGER = <<~EOF.freeze
+    pub:-:1024:17:327574EE02A818DD:2009-04-22:::-:Cloudera Apt Repository:
+    fpr:::::::::F36A89E33CC1BD0F71079007327574EE02A818DD:
+    sub:-:2048:16:84080586D1CA74A1:2009-04-22::::
+  EOF
 
-describe Chef::Provider::AptRepository do
-  let(:new_resource) { Chef::Resource::AptRepository.new("multiverse") }
-
-  let(:provider) do
-    node = Chef::Node.new
-    events = Chef::EventDispatch::Dispatcher.new
-    run_context = Chef::RunContext.new(node, {}, events)
-    Chef::Provider::AptRepository.new(new_resource, run_context)
-  end
+  let(:node) { Chef::Node.new }
+  let(:events) { Chef::EventDispatch::Dispatcher.new }
+  let(:run_context) { Chef::RunContext.new(node, {}, events) }
+  let(:collection) { double("resource collection") }
+  let(:new_resource) { Chef::Resource::AptRepository.new("multiverse", run_context) }
+  let(:provider) { new_resource.provider_for_action(:add) }
 
   let(:apt_key_finger_cmd) do
-    "apt-key adv --list-public-keys --with-fingerprint --with-colons"
+    %w{apt-key adv --list-public-keys --with-fingerprint --with-colons}
   end
 
   let(:apt_key_finger) do
@@ -63,18 +61,18 @@ describe Chef::Provider::AptRepository do
   end
 
   let(:gpg_finger) do
-    double("shell_out", stdout: GPG_FINGER, exitstatus: 0, error?: false)
+    double("shell_out", stdout: APG_GPG_FINGER, exitstatus: 0, error?: false)
   end
 
   let(:gpg_shell_out_success) do
-    double("shell_out", :stdout => "pub  2048R/7BD9BF62 2011-08-19 nginx signing key <signing-key@nginx.com>",
-                        :exitstatus => 0, :error? => false)
+    double("shell_out", stdout: "pub  2048R/7BD9BF62 2011-08-19 nginx signing key <signing-key@nginx.com>",
+                        exitstatus: 0, error?: false)
   end
 
   let(:gpg_shell_out_failure) do
-    double("shell_out", :stderr => "gpg: no valid OpenPGP data found.\n
+    double("shell_out", stderr: "gpg: no valid OpenPGP data found.\n
                                     gpg: processing message failed: eof",
-                        :exitstatus => 1, :error? => true)
+                        exitstatus: 1, error?: true)
   end
 
   let(:apt_fingerprints) do
@@ -106,12 +104,12 @@ C5986B4F1257FFA86632CBA746181433FBB75451
   describe "#extract_fingerprints_from_cmd" do
     it "runs the desired command" do
       expect(provider).to receive(:shell_out).and_return(apt_key_finger)
-      provider.extract_fingerprints_from_cmd(apt_key_finger_cmd)
+      provider.extract_fingerprints_from_cmd(*apt_key_finger_cmd)
     end
 
     it "returns a list of key fingerprints" do
       expect(provider).to receive(:shell_out).and_return(apt_key_finger)
-      expect(provider.extract_fingerprints_from_cmd(apt_key_finger_cmd)).to eql(apt_fingerprints)
+      expect(provider.extract_fingerprints_from_cmd(*apt_key_finger_cmd)).to eql(apt_fingerprints)
     end
   end
 
@@ -124,21 +122,21 @@ C5986B4F1257FFA86632CBA746181433FBB75451
 
   describe "#no_new_keys?" do
     before do
-      allow(provider).to receive(:extract_fingerprints_from_cmd).with(apt_key_finger_cmd).and_return(apt_fingerprints)
+      allow(provider).to receive(:extract_fingerprints_from_cmd).with(*apt_key_finger_cmd).and_return(apt_fingerprints)
     end
 
     let(:file) { "/tmp/remote-gpg-keyfile" }
 
     it "matches a set of keys" do
       allow(provider).to receive(:extract_fingerprints_from_cmd)
-        .with("gpg --with-fingerprint --with-colons #{file}")
+        .with("gpg", "--with-fingerprint", "--with-colons", file)
         .and_return(Array(apt_fingerprints.first))
       expect(provider.no_new_keys?(file)).to be_truthy
     end
 
     it "notices missing keys" do
       allow(provider).to receive(:extract_fingerprints_from_cmd)
-        .with("gpg --with-fingerprint --with-colons #{file}")
+        .with("gpg", "--with-fingerprint", "--with-colons", file)
         .and_return(%w{ F36A89E33CC1BD0F71079007327574EE02A818DD })
       expect(provider.no_new_keys?(file)).to be_falsey
     end
@@ -162,16 +160,16 @@ C5986B4F1257FFA86632CBA746181433FBB75451
 
   describe "#keyserver_install_cmd" do
     it "returns keyserver install command" do
-      expect(provider.keyserver_install_cmd("ABC", "gpg.mit.edu")).to eq("apt-key adv --recv --keyserver hkp://gpg.mit.edu:80 ABC")
+      expect(provider.keyserver_install_cmd("ABC", "gpg.mit.edu")).to eq("apt-key adv --no-tty --recv --keyserver hkp://gpg.mit.edu:80 ABC")
     end
 
     it "uses proxy if key_proxy property is set" do
       new_resource.key_proxy("proxy.mycorp.dmz:3128")
-      expect(provider.keyserver_install_cmd("ABC", "gpg.mit.edu")).to eq("apt-key adv --recv --keyserver-options http-proxy=proxy.mycorp.dmz:3128 --keyserver hkp://gpg.mit.edu:80 ABC")
+      expect(provider.keyserver_install_cmd("ABC", "gpg.mit.edu")).to eq("apt-key adv --no-tty --recv --keyserver-options http-proxy=proxy.mycorp.dmz:3128 --keyserver hkp://gpg.mit.edu:80 ABC")
     end
 
     it "properly handles keyservers passed with hkp:// URIs" do
-      expect(provider.keyserver_install_cmd("ABC", "hkp://gpg.mit.edu")).to eq("apt-key adv --recv --keyserver hkp://gpg.mit.edu ABC")
+      expect(provider.keyserver_install_cmd("ABC", "hkp://gpg.mit.edu")).to eq("apt-key adv --no-tty --recv --keyserver hkp://gpg.mit.edu ABC")
     end
   end
 
@@ -226,27 +224,32 @@ C5986B4F1257FFA86632CBA746181433FBB75451
 
   describe "#build_repo" do
     it "creates a repository string" do
-      target = %Q{deb      "http://test/uri" unstable main\n}
+      target = "deb      http://test/uri unstable main\n"
       expect(provider.build_repo("http://test/uri", "unstable", "main", false, nil)).to eql(target)
     end
 
+    it "creates a repository string with spaces" do
+      target = "deb      http://test/uri%20with%20spaces unstable main\n"
+      expect(provider.build_repo("http://test/uri with spaces", "unstable", "main", false, nil)).to eql(target)
+    end
+
     it "creates a repository string with no distribution" do
-      target = %Q{deb      "http://test/uri" main\n}
+      target = "deb      http://test/uri main\n"
       expect(provider.build_repo("http://test/uri", nil, "main", false, nil)).to eql(target)
     end
 
     it "creates a repository string with source" do
-      target = %Q{deb      "http://test/uri" unstable main\ndeb-src  "http://test/uri" unstable main\n}
+      target = "deb      http://test/uri unstable main\ndeb-src  http://test/uri unstable main\n"
       expect(provider.build_repo("http://test/uri", "unstable", "main", false, nil, true)).to eql(target)
     end
 
     it "creates a repository string with options" do
-      target = %Q{deb      [trusted=yes] "http://test/uri" unstable main\n}
+      target = "deb      [trusted=yes] http://test/uri unstable main\n"
       expect(provider.build_repo("http://test/uri", "unstable", "main", true, nil)).to eql(target)
     end
 
     it "handles a ppa repo" do
-      target = %Q{deb      "http://ppa.launchpad.net/chef/main/ubuntu" unstable main\n}
+      target = "deb      http://ppa.launchpad.net/chef/main/ubuntu unstable main\n"
       expect(provider).to receive(:make_ppa_url).with("ppa:chef/main").and_return("http://ppa.launchpad.net/chef/main/ubuntu")
       expect(provider.build_repo("ppa:chef/main", "unstable", "main", false, nil)).to eql(target)
     end

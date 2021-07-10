@@ -1,6 +1,6 @@
 #
 # Author:: Adam Edwards (<adamed@chef.io>)
-# Copyright:: Copyright (c) 2015 Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,11 +39,11 @@ describe "a class that mixes in user_context" do
 
   context "when running on Windows" do
     before do
-      allow(::Chef::Platform).to receive(:windows?).and_return(true)
+      allow(ChefUtils).to receive(:windows?).and_return(true)
       allow(::Chef::Util::Windows::LogonSession).to receive(:new).and_return(logon_session)
     end
 
-    let(:logon_session) { instance_double("::Chef::Util::Windows::LogonSession", :set_user_context => nil, :open => nil, :close => nil) }
+    let(:logon_session) { instance_double("::Chef::Util::Windows::LogonSession", set_user_context: nil, open: nil, close: nil) }
 
     it "does not raise an exception when the user and all parameters are nil" do
       expect { instance_with_user_context.with_context(nil, nil, nil) {} }.not_to raise_error
@@ -56,8 +56,7 @@ describe "a class that mixes in user_context" do
 
       let(:block_object) do
         class BlockClass
-          def block_method
-          end
+          def block_method; end
         end
         BlockClass.new
       end
@@ -78,17 +77,9 @@ describe "a class that mixes in user_context" do
       end
 
       context "when the block raises an exception" do
-        class UserContextTestException < RuntimeError
-        end
-        let(:block_parameter) { Proc.new { raise UserContextTextException } }
-
-        it "raises the exception raised by the block" do
-          expect { instance_with_user_context.with_context("kamilah", nil, "chef4life", &block_parameter) }.not_to raise_error(UserContextTestException)
-        end
-
         it "closes the logon session so resources are not leaked" do
           expect(logon_session).to receive(:close)
-          expect { instance_with_user_context.with_context("kamilah", nil, "chef4life", &block_parameter) }.not_to raise_error(UserContextTestException)
+          expect { instance_with_user_context.with_context("kamilah", nil, "chef4life") { 1 / 0 } }.to raise_error(ZeroDivisionError)
         end
       end
     end
@@ -98,7 +89,7 @@ describe "a class that mixes in user_context" do
 
   context "when not running on Windows" do
     before do
-      allow(::Chef::Platform).to receive(:windows?).and_return(false)
+      allow(ChefUtils).to receive(:windows?).and_return(false)
     end
 
     it "raises a ::Chef::Exceptions::UnsupportedPlatform exception" do

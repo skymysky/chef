@@ -1,7 +1,7 @@
 #
 # Author:: Jesse Campbell (<hikeit@gmail.com>)
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-require "chef/provider/file"
+require_relative "file"
 
 class Chef
   class Provider
@@ -32,18 +32,18 @@ class Chef
       def define_resource_requirements
         [ new_resource.remote_user, new_resource.remote_domain,
           new_resource.remote_password ].each do |prop|
-          requirements.assert(:all_actions) do |a|
-            a.assertion do
-              if prop
-                node[:platform_family] == "windows"
-              else
-                true
+            requirements.assert(:all_actions) do |a|
+              a.assertion do
+                if prop
+                  windows?
+                else
+                  true
+                end
               end
+              a.failure_message Chef::Exceptions::UnsupportedPlatform, "'remote_user', 'remote_domain' and 'remote_password' properties are supported only for Windows platform"
+              a.whyrun("Assuming that the platform is Windows while passing 'remote_user', 'remote_domain' and 'remote_password' properties")
             end
-            a.failure_message Chef::Exceptions::UnsupportedPlatform, "'remote_user', 'remote_domain' and 'remote_password' properties are supported only for Windows platform"
-            a.whyrun("Assuming that the platform is Windows while passing 'remote_user', 'remote_domain' and 'remote_password' properties")
           end
-        end
 
         super
       end
@@ -58,6 +58,7 @@ class Chef
       def managing_content?
         return true if new_resource.checksum
         return true if !new_resource.source.nil? && @action != :create_if_missing
+
         false
       end
 

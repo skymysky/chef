@@ -1,6 +1,6 @@
 #
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2010-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,7 +33,7 @@ class Chef
     #     Chef::Mixin::RecipeDefinitionDSLCore is deprecated, use Chef::DSL::Recipe instead.
     #   EOM
     def self.deprecate_constant(name, replacement, message)
-      deprecated_constants[name] = { :replacement => replacement, :message => message }
+      deprecated_constants[name] = { replacement: replacement, message: message }
     end
 
     # Const missing hook to look up deprecated constants defined with
@@ -54,7 +54,7 @@ class Chef
     module Deprecation
 
       class DeprecatedObjectProxyBase
-        KEEPERS = %w{__id__ __send__ instance_eval == equal? initialize object_id}
+        KEEPERS = %w{__id__ __send__ instance_eval == equal? initialize object_id}.freeze
         instance_methods.each { |method_name| undef_method(method_name) unless KEEPERS.include?(method_name.to_s) }
       end
 

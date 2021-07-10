@@ -1,6 +1,6 @@
 #
 # Author:: Kaustubh Deorukhkar (kaustubh@clogeny.com)
-# Copyright:: Copyright 2013-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require "chef/provider/ifconfig"
+require_relative "../ifconfig"
 
 class Chef
   class Provider
@@ -31,7 +31,7 @@ class Chef
           found_interface = false
           interface = {}
 
-          @status = shell_out_compact("ifconfig", "-a")
+          @status = shell_out("ifconfig", "-a")
           @status.stdout.each_line do |line|
             if !found_interface
               if line =~ /^(\S+):\sflags=(\S+)/
@@ -65,7 +65,8 @@ class Chef
 
         def add_command
           # ifconfig changes are temporary, chdev persist across reboots.
-          raise Chef::Exceptions::Ifconfig, "interface metric attribute cannot be set for :add action" if new_resource.metric
+          raise Chef::Exceptions::Ifconfig, "interface metric property cannot be set for :add action" if new_resource.metric
+
           command = [ "chdev", "-l", new_resource.device, "-a", "netaddr=#{new_resource.name}" ]
           command += [ "-a", "netmask=#{new_resource.mask}" ] if new_resource.mask
           command += [ "-a", "mtu=#{new_resource.mtu}" ] if new_resource.mtu

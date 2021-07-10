@@ -1,7 +1,6 @@
-#--
 # Author:: Tim Hinderliter (<tim@chef.io>)
 # Author:: Christopher Walters (<cw@chef.io>)
-# Copyright:: Copyright 2010-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/mash"
-require "chef/cookbook/gem_installer"
+require_relative "../mash"
+require_relative "gem_installer"
 
 class Chef
   # == Chef::CookbookCollection

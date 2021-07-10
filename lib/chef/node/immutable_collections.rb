@@ -1,5 +1,5 @@
 #--
-# Copyright:: Copyright 2012-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,10 +15,11 @@
 # limitations under the License.
 #
 
-require "chef/node/common_api"
-require "chef/node/mixin/state_tracking"
-require "chef/node/mixin/immutablize_array"
-require "chef/node/mixin/immutablize_hash"
+require_relative "common_api"
+require_relative "mixin/state_tracking"
+require_relative "mixin/immutablize_array"
+require_relative "mixin/immutablize_hash"
+require_relative "../delayed_evaluator"
 
 class Chef
   class Node
@@ -96,11 +97,23 @@ class Chef
 
       alias_method :to_array, :to_a
 
+      # As Psych module, not respecting ImmutableArray object
+      # So first convert it to Hash/Array then parse it to `.to_yaml`
+      def to_yaml(*opts)
+        to_a.to_yaml(*opts)
+      end
+
       private
 
       # needed for __path__
       def convert_key(key)
         key
+      end
+
+      def [](*args)
+        value = super
+        value = value.call while value.is_a?(::Chef::DelayedEvaluator)
+        value
       end
 
       prepend Chef::Node::Mixin::StateTracking
@@ -114,7 +127,7 @@ class Chef
     # ImmutableMash acts like a Mash (Hash that is indifferent to String or
     # Symbol keys), with some important exceptions:
     # * Methods that mutate state are overridden to raise an error instead.
-    # * Methods that read from the collection are overriden so that they check
+    # * Methods that read from the collection are overridden so that they check
     #   if the Chef::Node::Attribute has been modified since an instance of
     #   this class was generated. An error is raised if the object detects that
     #   it is stale.
@@ -151,7 +164,7 @@ class Chef
       end
 
       def to_h
-        h = Hash.new
+        h = {}
         each_pair do |k, v|
           h[k] =
             case v
@@ -168,11 +181,23 @@ class Chef
 
       alias_method :to_hash, :to_h
 
+      # As Psych module, not respecting ImmutableMash object
+      # So first convert it to Hash/Array then parse it to `.to_yaml`
+      def to_yaml(*opts)
+        to_h.to_yaml(*opts)
+      end
+
       # For elements like Fixnums, true, nil...
       def safe_dup(e)
         e.dup
       rescue TypeError
         e
+      end
+
+      def [](*args)
+        value = super
+        value = value.call while value.is_a?(::Chef::DelayedEvaluator)
+        value
       end
 
       prepend Chef::Node::Mixin::StateTracking

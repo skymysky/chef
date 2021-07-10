@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,13 +16,17 @@
 # limitations under the License.
 #
 
+autoload :ChefUtils, "chef-utils"
+require_relative "../mixin/chef_utils_wiring" unless defined?(Chef::Mixin::ChefUtilsWiring)
+
 class Chef
   module DSL
-
     # == Chef::DSL::PlatformIntrospection
     # Provides the DSL for platform-dependent switch logic, such as
     # #value_for_platform.
     module PlatformIntrospection
+      include ChefUtils
+      include Chef::Mixin::ChefUtilsWiring
 
       # Implementation class for determining platform dependent values
       class PlatformDependentValue
@@ -70,25 +74,27 @@ class Chef
         def match_versions(node)
           platform, version = node[:platform].to_s, node[:platform_version].to_s
           return nil unless @values.key?(platform)
+
           node_version = Chef::Version::Platform.new(version)
           key_matches = []
           keys = @values[platform].keys
           keys.each do |k|
-            begin
-              if Chef::VersionConstraint::Platform.new(k).include?(node_version)
-                key_matches << k
-              end
-            rescue Chef::Exceptions::InvalidVersionConstraint => e
-              Chef::Log.trace "Caught InvalidVersionConstraint. This means that a key in value_for_platform cannot be interpreted as a Chef::VersionConstraint::Platform."
-              Chef::Log.trace(e)
+
+            if Chef::VersionConstraint::Platform.new(k).include?(node_version)
+              key_matches << k
             end
+          rescue Chef::Exceptions::InvalidVersionConstraint => e
+            Chef::Log.trace "Caught InvalidVersionConstraint. This means that a key in value_for_platform cannot be interpreted as a Chef::VersionConstraint::Platform."
+            Chef::Log.trace(e)
+
           end
           return @values[platform][version] if key_matches.include?(version)
+
           case key_matches.length
           when 0
-            return nil
+            nil
           when 1
-            return @values[platform][key_matches.first]
+            @values[platform][key_matches.first]
           else
             raise "Multiple matches detected for #{platform} with values #{@values}. The matches are: #{key_matches}"
           end
@@ -124,7 +130,7 @@ class Chef
         end
 
         def assert_valid_platform_values!(platforms, value)
-          unless value.kind_of?(Hash)
+          unless value.is_a?(Hash)
             msg = "platform dependent values must be specified in the format :platform => {:version => value} "
             msg << "you gave a value #{value.inspect} for platform(s) #{platforms}"
             raise ArgumentError, msg
@@ -164,7 +170,7 @@ class Chef
         has_platform
       end
 
-     # Implementation class for determining platform family dependent values
+      # Implementation class for determining platform family dependent values
       class PlatformFamilyDependentValue
 
         # Create a platform family dependent value object.
@@ -243,22 +249,17 @@ class Chef
         end
       end
 
-      # Shamelessly stolen from https://github.com/sethvargo/chef-sugar/blob/master/lib/chef/sugar/docker.rb
-      # Given a node object, returns whether the node is a docker container.
+      # a simple helper to determine if we're on a windows release pre-2012 / 8
       #
-      # === Parameters
-      # node:: [Chef::Node] The node to check.
-      #
-      # === Returns
-      # true:: if the current node is a docker container
-      # false:: if the current node is not a docker container
-      def docker?(node = run_context.nil? ? nil : run_context.node)
-        # Using "File.exist?('/.dockerinit') || File.exist?('/.dockerenv')" makes Travis sad,
-        # and that makes us sad too.
-        !!(node && node[:virtualization] && node[:virtualization][:systems] &&
-           node[:virtualization][:systems][:docker] && node[:virtualization][:systems][:docker] == "guest")
+      # @deprecated Windows releases before Windows 2012 and 8 are no longer supported
+      # @return [Boolean] Is the system older than Windows 8 / 2012
+      def older_than_win_2012_or_8?(node = run_context.nil? ? nil : run_context.node)
+        false # we don't support platforms that would be true
       end
 
+      # ^^^^^^ NOTE: PLEASE DO NOT CONTINUE TO ADD THESE KINDS OF PLATFORM_VERSION APIS WITHOUT ^^^^^^^
+      # ^^^^^^ GOING THROUGH THE DESIGN REVIEW PROCESS AND ADDRESS THE EXISTING CHEF-SUGAR ONES ^^^^^^^
+      # ^^^^^^ DO "THE HARD RIGHT THING" AND ADDRESS THE BROADER PROBLEM AND FIX IT ALL.        ^^^^^^^
     end
   end
 end

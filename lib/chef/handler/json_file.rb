@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2010-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/handler"
-require "chef/resource/directory"
+require_relative "../handler"
+require_relative "../resource/directory"
 
 class Chef
   class Handler
@@ -41,7 +41,7 @@ class Chef
         savetime = Time.now.strftime("%Y%m%d%H%M%S")
         File.open(File.join(config[:path], "chef-run-report-#{savetime}.json"), "w") do |file|
 
-          #ensure start time and end time are output in the json properly in the event activesupport happens to be on the system
+          # ensure start time and end time are output in the json properly in the event activesupport happens to be on the system
           run_data = data
           run_data[:start_time] = run_data[:start_time].to_s
           run_data[:end_time] = run_data[:end_time].to_s
@@ -51,7 +51,7 @@ class Chef
       end
 
       def build_report_dir
-        unless File.exists?(config[:path])
+        unless File.exist?(config[:path])
           FileUtils.mkdir_p(config[:path])
           File.chmod(00700, config[:path])
         end

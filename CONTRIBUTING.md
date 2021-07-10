@@ -4,20 +4,20 @@ We're glad you want to contribute to a Chef project! This document will help ans
 
 ## Submitting Issues
 
-Not every contribution comes in the form of code. Submitting, confirming, and triaging issues is an important task for any project. At Chef we use Github to track all project issues.
+Not every contribution comes in the form of code. Submitting, confirming, and triaging issues is an important task for any project. At Chef we use GitHub to track all project issues.
 
-If you are familiar with Chef and know the component, that is causing you a problem, you can file an issue in the corresponding Github project. All of our Open Source Software can be found in our [Github organization](https://github.com/chef/). All projects include Github issue templates to help gather information needed for a thorough review.
+If you are familiar with Chef and know the component that is causing you a problem, you can file an issue in the corresponding GitHub project. All of our Open Source Software can be found in our [Chef GitHub organization](https://github.com/chef/). All projects include GitHub issue templates to help gather information needed for a thorough review.
 
-We ask you not to submit security concerns via Github. For details on submitting potential security issues please see <https://www.chef.io/security/>
+We ask you not to submit security concerns via GitHub. For details on submitting potential security issues please see <https://www.chef.io/security/>
 
-In addition to Github issues, we also utilize a feedback site that helps our product team track and rank feature requests. If you have a feature request, this is an excellent place to start <https://feedback.chef.io>
+In addition to GitHub issues, we also utilize a feedback site that helps our product team track and rank feature requests. If you have a feature request, this is an excellent place to start <https://www.chef.io/feedback/>
 
 ## Contribution Process
 
 We have a 3 step process for contributions:
 
 1. Commit changes to a git branch, making sure to sign-off those changes for the [Developer Certificate of Origin](#developer-certification-of-origin-dco).
-2. Create a Github Pull Request for your change, following the instructions in the pull request template.
+2. Create a GitHub Pull Request for your change, following the instructions in the pull request template.
 3. Perform a [Code Review](#code-review-process) with the project maintainers on the pull request.
 
 ### Pull Request Requirements
@@ -25,17 +25,17 @@ We have a 3 step process for contributions:
 Chef Projects are built to last. We strive to ensure high quality throughout the experience. In order to ensure this, we require that all pull requests to Chef projects meet these specifications:
 
 1. **Tests:** To ensure high quality code and protect against future regressions, we require all the code in Chef Projects to have at least unit test coverage. We use [RSpec](http://rspec.info/) for unit testing.
-2. **Green CI Tests:** We use [Travis CI](https://travis-ci.org/) and/or [AppVeyor](https://www.appveyor.com/) CI systems to test all pull requests. We require these test runs to succeed on every pull request before being merged.
+2. **Green CI Tests:** We use [Buildkite](https://buildkite.com/chef-oss) to test all pull requests. We require these test runs to succeed on every pull request before being merged.
 
 ### Code Review Process
 
-Code review takes place in Github pull requests. See [this article](https://help.github.com/articles/about-pull-requests/) if you're not familiar with Github Pull Requests.
+Code review takes place in GitHub pull requests. See [this article](https://help.github.com/articles/about-pull-requests/) if you're not familiar with GitHub Pull Requests.
 
 Once you open a pull request, project maintainers will review your code and respond to your pull request with any feedback they might have. The process at this point is as follows:
 
-1. Two thumbs-up (:+1:) are required from project maintainers. See the master maintainers document for Chef projects at <https://github.com/chef/chef/blob/master/MAINTAINERS.md>.
-2. When ready, your pull request will be tagged with label `Ready For Merge`.
-3. Your change will be merged into the project's `master` branch and will be noted in the project's `CHANGELOG.md` at the time of release.
+1. Two or more members of the owners, approvers, or reviewers groups must approve your PR. See the [Chef Infra OSS Project](https://github.com/chef/chef-oss-practices/blob/master/projects/chef-infra.md) for a list of all members.
+2. Your change will be merged into the project's `master` branch
+3. Our Expeditor bot will automatically increment the version and update the project's changelog with your contribution. For projects that ship as a package, Expeditor will kick off a build which will publish the package to the project's `current` channel.
 
 If you would like to learn about when your code will be available in a release of Chef, read more about [Chef Release Cycles](#release-cycles).
 
@@ -62,7 +62,7 @@ By making a contribution to this project, I certify that:
 
 (b) The contribution is based upon previous work that, to the
     best of my knowledge, is covered under an appropriate open
-    source license and I have the right under that license to   
+    source license and I have the right under that license to
     submit that work with modifications, whether created in whole
     or in part by me, under the same open source license (unless
     I am permitted to submit under a different license), as
@@ -90,7 +90,7 @@ The DCO requires a sign-off message in the following format appear on each commi
 Signed-off-by: Julia Child <juliachild@chef.io>
 ```
 
-The DCO text can either be manually added to your commit body, or you can add either **-s** or **--signoff** to your usual git commit commands. If you forget to add the sign-off you can also amend a previous commit with the sign-off by running **git commit --amend -s**. If you've pushed your changes to Github already you'll need to force push your branch after this with **git push -f**.
+The DCO text can either be manually added to your commit body, or you can add either **-s** or **--signoff** to your usual git commit commands. If you are using the GitHub UI to make a change you can add the sign-off message directly to the commit message when creating the pull request. If you forget to add the sign-off you can also amend a previous commit with the sign-off by running **git commit --amend -s**. If you've pushed your changes to GitHub already you'll need to force push your branch after this with **git push -f**.
 
 ### Chef Obvious Fix Policy
 
@@ -123,9 +123,9 @@ Date:   Wed Sep 18 11:44:40 2015 -0700
 
 ## Release Cycles
 
-Our primary shipping vehicle is operating system specific packages that includes all the requirements of Chef. We call these [Omnibus packages](https://github.com/chef/omnibus)
+Our primary shipping vehicle is operating system specific packages that includes all the requirements of Chef. The packages are built with our [Omnibus](https://github.com/chef/omnibus) packing project.
 
-We also release our software as gems to [Rubygems](https://rubygems.org/) but we strongly recommend using Chef packages since they are the only combination of native libraries & gems required by Chef that we test throughly.
+We also release our software as gems to [Rubygems](https://rubygems.org/) but we strongly recommend using Chef packages since they are the only combination of native libraries & gems required by Chef that we test thoroughly.
 
 Our version numbering roughly follows [Semantic Versioning](http://semver.org/) standard. Our standard version numbers look like X.Y.Z which mean:
 
@@ -133,9 +133,9 @@ Our version numbering roughly follows [Semantic Versioning](http://semver.org/) 
 - Y is a minor release, which adds both new features and bug fixes
 - Z is a patch release, which adds just bug fixes
 
-After shipping a release of Chef we bump the `Minor` version by one to start development of the next minor release. All merges to master trigger an increment of the `Patch` version, and a build through our internal testing pipeline. We do a `Minor` release approximately every month, which consist of shipping one of the already auto-incremented and tested `Patch` versions. For example after shiping 12.10.24, we incremented Chef to 12.11.0\. From there 18 commits where merged bringing the version to 12.11.18, which we shipped as an omnibus package.
+After shipping a release of Chef we bump the `Minor` version by one to start development of the next minor release. All merges to master trigger an increment of the `Patch` version, and a build through our internal testing pipeline. We do a `Minor` release approximately every month, which consist of shipping one of the already auto-incremented and tested `Patch` versions. For example after shipping 12.10.24, we incremented Chef to 12.11.0\. From there 18 commits where merged bringing the version to 12.11.18, which we shipped as an omnibus package.
 
-Announcements of releases are made to the [chef mailing list](https://discourse.chef.io/c/chef-release) when they are available.
+Announcements of releases are made to the [chef mailing list](https://discourse.chef.io/c/chef-release) when they are available and are mirrored to the #announcements channel on the [Chef Community Slack](https://community-slack.chef.io/).
 
 ## Chef Community
 
@@ -148,4 +148,5 @@ Also here are some additional pointers to some awesome Chef content:
 
 - [Chef Docs](https://docs.chef.io/)
 - [Learn Chef](https://learn.chef.io/)
-- [Chef Website](https://www.chef.io/)
+- [Chef Software Inc. Website](https://www.chef.io/)
+- [Chef Project Website](https://www.chef.sh/)

@@ -1,6 +1,6 @@
 #--
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2012-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,11 @@
 # limitations under the License.
 #
 
-require "chef/node/common_api"
-require "chef/node/mixin/state_tracking"
+require_relative "common_api"
+require_relative "mixin/state_tracking"
+require_relative "mixin/immutablize_array"
+require_relative "mixin/immutablize_hash"
+require_relative "mixin/mashy_array"
 
 class Chef
   class Node
@@ -26,36 +29,9 @@ class Chef
     # "root" (Chef::Node::Attribute) object, and will trigger a cache
     # invalidation on that object when mutated.
     class AttrArray < Array
-      MUTATOR_METHODS = [
-        :<<,
-        :[]=,
-        :clear,
-        :collect!,
-        :compact!,
-        :default=,
-        :default_proc=,
-        :delete_at,
-        :delete_if,
-        :fill,
-        :flatten!,
-        :insert,
-        :keep_if,
-        :map!,
-        :merge!,
-        :pop,
-        :push,
-        :update,
-        :reject!,
-        :reverse!,
-        :replace,
-        :select!,
-        :shift,
-        :slice!,
-        :sort!,
-        :sort_by!,
-        :uniq!,
-        :unshift,
-      ]
+      include Chef::Node::Mixin::MashyArray
+
+      MUTATOR_METHODS = Chef::Node::Mixin::ImmutablizeArray::DISALLOWED_MUTATOR_METHODS
 
       # For all of the methods that may mutate an Array, we override them to
       # also invalidate the cached merged_attributes on the root
@@ -89,13 +65,15 @@ class Chef
         Array.new(map { |e| safe_dup(e) })
       end
 
+      def to_yaml(*opts)
+        to_a.to_yaml(*opts)
+      end
+
       private
 
       def convert_value(value)
         case value
-        when VividMash
-          value
-        when AttrArray
+        when VividMash, AttrArray
           value
         when Hash
           VividMash.new(value, __root__, __node__, __precedence__)
@@ -130,32 +108,21 @@ class Chef
       # Methods that mutate a VividMash. Each of them is overridden so that it
       # also invalidates the cached merged_attributes on the root Attribute
       # object.
-      MUTATOR_METHODS = [
-        :clear,
-        :delete_if,
-        :keep_if,
-        :merge!,
-        :update,
-        :reject!,
-        :replace,
-        :select!,
-        :shift,
-      ]
+      MUTATOR_METHODS = Chef::Node::Mixin::ImmutablizeHash::DISALLOWED_MUTATOR_METHODS - %i{write write! unlink unlink!}
 
       # For all of the mutating methods on Mash, override them so that they
       # also invalidate the cached `merged_attributes` on the root Attribute
       # object.
-
-      def delete(key, &block)
-        send_reset_cache(__path__, key)
-        super
-      end
-
       MUTATOR_METHODS.each do |mutator|
         define_method(mutator) do |*args, &block|
           send_reset_cache
           super(*args, &block)
         end
+      end
+
+      def delete(key, &block)
+        send_reset_cache(__path__, key)
+        super
       end
 
       def initialize(data = {})
@@ -190,9 +157,7 @@ class Chef
       # attribute tree will have the correct cache invalidation behavior.
       def convert_value(value)
         case value
-        when VividMash
-          value
-        when AttrArray
+        when VividMash, AttrArray
           value
         when Hash
           VividMash.new(value, __root__, __node__, __precedence__)
@@ -205,6 +170,10 @@ class Chef
 
       def dup
         Mash.new(self)
+      end
+
+      def to_yaml(*opts)
+        to_h.to_yaml(*opts)
       end
 
       prepend Chef::Node::Mixin::StateTracking

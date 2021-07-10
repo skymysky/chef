@@ -1,5 +1,5 @@
 #--
-# Copyright:: Copyright 2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -50,8 +50,7 @@ class Chef
           # in which case we'll just start with the highest version and see what happens
           ServerAPIVersions.instance.min_server_version.nil? || (version >= ServerAPIVersions.instance.min_server_version && version <= ServerAPIVersions.instance.send(type))
         end
-          .sort { |a, b| a.send(:minimum_api_version) <=> b.send(:minimum_api_version) }
-          .last
+          .max_by { |a| a.send(:minimum_api_version) }
       end
 
       def def_versioned_delegator(method)

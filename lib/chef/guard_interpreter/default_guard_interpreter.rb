@@ -1,6 +1,6 @@
 #
 # Author:: Adam Edwards (<adamed@chef.io>)
-# Copyright:: Copyright 2014-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,24 +16,23 @@
 # limitations under the License.
 #
 
-require "chef/mixin/shell_out"
+require_relative "../mixin/shell_out"
+require_relative "../exceptions"
 
 class Chef
   class GuardInterpreter
     class DefaultGuardInterpreter
       include Chef::Mixin::ShellOut
-
-      protected
+      attr_reader :output
 
       def initialize(command, opts)
         @command = command
         @command_opts = opts
       end
 
-      public
-
       def evaluate
-        result = shell_out_with_systems_locale(@command, @command_opts)
+        result = shell_out(@command, default_env: false, **@command_opts)
+        @output = "STDOUT: #{result.stdout}\nSTDERR: #{result.stderr}\n"
         Chef::Log.debug "Command failed: #{result.stderr}" unless result.status.success?
         result.status.success?
       # Timeout fails command rather than chef-client run, see:

@@ -1,5 +1,5 @@
-require "chef/chef_fs/file_system/base_fs_object"
-require "chef/chef_fs/file_system/nonexistent_fs_object"
+require_relative "base_fs_object"
+require_relative "nonexistent_fs_object"
 
 class Chef
   module ChefFS
@@ -19,7 +19,7 @@ class Chef
         def children
           result = []
           seen = {}
-            # If multiple things have the same name, the first one wins.
+          # If multiple things have the same name, the first one wins.
           multiplexed_dirs.each do |dir|
             dir.children.each do |child|
               if seen[child.name]

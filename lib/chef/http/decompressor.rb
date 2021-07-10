@@ -1,6 +1,6 @@
 #--
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2013-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,13 +16,13 @@
 # limitations under the License.
 #
 
-require "zlib"
-require "chef/http/http_request"
+require "zlib" unless defined?(Zlib)
+require_relative "http_request"
 
 class Chef
   class HTTP
 
-    # Middleware-esque class for handling compression in HTTP responses.
+    # Middleware-ish class for handling compression in HTTP responses.
     class Decompressor
       class NoopInflater
         def inflate(chunk)
@@ -64,6 +64,7 @@ class Chef
         # temporary hack, skip processing if return_value is false
         # needed to keep conditional get stuff working correctly.
         return [http_response, rest_request, return_value] if return_value == false
+
         response_body = decompress_body(http_response)
         http_response.body.replace(response_body) if http_response.body.respond_to?(:replace)
         [http_response, rest_request, return_value]

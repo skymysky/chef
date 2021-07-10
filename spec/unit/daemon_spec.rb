@@ -1,6 +1,6 @@
 #
 # Author:: AJ Christensen (<aj@junglist.gen.nz>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,8 +24,8 @@ describe Chef::Daemon do
 
   before do
     if windows?
-      mock_struct = #Struct::Passwd.new(nil, nil, 111, 111)
-        mock_struct = OpenStruct.new(:uid => 2342, :gid => 2342)
+      mock_struct = # Struct::Passwd.new(nil, nil, 111, 111)
+        mock_struct = OpenStruct.new(uid: 2342, gid: 2342)
       allow(Etc).to receive(:getpwnam).and_return mock_struct
       allow(Etc).to receive(:getgrnam).and_return mock_struct
       # mock unimplemented methods
@@ -126,8 +126,8 @@ describe Chef::Daemon do
       allow(Process::UID).to receive(:change_privilege).and_return(nil)
       allow(Process::GID).to receive(:change_privilege).and_return(nil)
 
-      @pw_user = double("Struct::Passwd", :uid => 501)
-      @pw_group = double("Struct::Group", :gid => 20)
+      @pw_user = double("Struct::Passwd", uid: 501)
+      @pw_group = double("Struct::Group", gid: 20)
 
       allow(Process).to receive(:initgroups).and_return(true)
 

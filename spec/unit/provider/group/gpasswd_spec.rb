@@ -1,6 +1,6 @@
 #
 # Author:: AJ Christensen (<aj@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -68,8 +68,8 @@ describe Chef::Provider::Group::Gpasswd, "modify_group_members" do
       end
 
       it "logs a message and sets group's members to 'none'" do
-        expect(logger).to receive(:trace).with("group[wheel] setting group members to: none")
-        expect(@provider).to receive(:shell_out!).with("gpasswd", "-M", "", "wheel")
+        expect(logger).to receive(:debug).with("group[wheel] setting group members to: none")
+        expect(@provider).to receive(:shell_out_compacted!).with("gpasswd", "-M", "", "wheel")
         @provider.modify_group_members
       end
     end
@@ -81,20 +81,20 @@ describe Chef::Provider::Group::Gpasswd, "modify_group_members" do
       end
 
       it "does not modify group membership" do
-        expect(@provider).not_to receive(:shell_out!)
+        expect(@provider).not_to receive(:shell_out_compacted!)
         @provider.modify_group_members
       end
     end
 
     describe "when the resource specifies group members" do
       it "should log an appropriate debug message" do
-        expect(logger).to receive(:trace).with("group[wheel] setting group members to: lobster, rage, fist")
-        allow(@provider).to receive(:shell_out!)
+        expect(logger).to receive(:debug).with("group[wheel] setting group members to: lobster, rage, fist")
+        allow(@provider).to receive(:shell_out_compacted!)
         @provider.modify_group_members
       end
 
       it "should run gpasswd with the members joined by ',' followed by the target group" do
-        expect(@provider).to receive(:shell_out!).with("gpasswd", "-M", "lobster,rage,fist", "wheel")
+        expect(@provider).to receive(:shell_out_compacted!).with("gpasswd", "-M", "lobster,rage,fist", "wheel")
         @provider.modify_group_members
       end
 
@@ -107,9 +107,9 @@ describe Chef::Provider::Group::Gpasswd, "modify_group_members" do
 
         it "should run gpasswd individually for each user when the append option is set" do
           @new_resource.append(true)
-          expect(@provider).to receive(:shell_out!).with("gpasswd", "-a", "lobster", "wheel")
-          expect(@provider).to receive(:shell_out!).with("gpasswd", "-a", "rage", "wheel")
-          expect(@provider).to receive(:shell_out!).with("gpasswd", "-a", "fist", "wheel")
+          expect(@provider).to receive(:shell_out_compacted!).with("gpasswd", "-a", "lobster", "wheel")
+          expect(@provider).to receive(:shell_out_compacted!).with("gpasswd", "-a", "rage", "wheel")
+          expect(@provider).to receive(:shell_out_compacted!).with("gpasswd", "-a", "fist", "wheel")
           @provider.modify_group_members
         end
       end

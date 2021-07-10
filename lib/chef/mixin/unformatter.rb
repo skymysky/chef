@@ -1,6 +1,6 @@
 #
 # Author:: Jay Mundrawala (<jdm@chef.io>)
-# Copyright:: Copyright 2015-2016, Chef Software
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ class Chef
     module Unformatter
 
       def write(message)
-        data = message.match(/(\[.+?\] )?([\w]+):(.*)$/)
+        data = message.match(/(\[.+?\] )?(\w+):(.*)$/)
         send(data[2].downcase.chomp.to_sym, data[3].strip)
       rescue NoMethodError
         send(:info, message)

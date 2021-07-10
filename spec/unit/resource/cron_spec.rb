@@ -115,37 +115,31 @@ describe Chef::Resource::Cron do
   end
 
   it "rejects any minute over 59" do
-    expect { resource.minute "60" }.to raise_error(RangeError)
+    expect { resource.minute "60" }.to raise_error(Chef::Exceptions::ValidationFailed)
   end
 
   it "rejects any hour over 23" do
-    expect { resource.hour "24" }.to raise_error(RangeError)
+    expect { resource.hour "24" }.to raise_error(Chef::Exceptions::ValidationFailed)
   end
 
   it "rejects any day over 31" do
-    expect { resource.day "32" }.to raise_error(RangeError)
+    expect { resource.day "32" }.to raise_error(Chef::Exceptions::ValidationFailed)
   end
 
   it "rejects any month over 12" do
-    expect { resource.month "13" }.to raise_error(RangeError)
+    expect { resource.month "13" }.to raise_error(Chef::Exceptions::ValidationFailed)
   end
 
   describe "weekday" do
     it "rejects any weekday over 7" do
-      expect { resource.weekday "8" }.to raise_error(RangeError)
+      expect { resource.weekday "8" }.to raise_error(Chef::Exceptions::ValidationFailed)
     end
     it "rejects any symbols which don't represent day of week" do
-      expect { resource.weekday :foo }.to raise_error(RangeError)
+      expect { resource.weekday :foo }.to raise_error(Chef::Exceptions::ValidationFailed)
     end
   end
 
-  it "converts integer schedule values to a string" do
-    %w{minute hour day month weekday}.each do |x|
-      expect(resource.send(x, 5)).to eql("5")
-    end
-  end
-
-  describe "when it has a time (minute, hour, day, month, weeekend) and user" do
+  describe "when it has a time (minute, hour, day, month, weekend) and user" do
     before do
       resource.command("tackle")
       resource.minute("1")

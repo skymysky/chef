@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,19 +19,19 @@
 require "spec_helper"
 
 describe Chef::Resource::User, "initialize" do
-  let(:resource) { Chef::Resource::User.new("adam") }
+  let(:resource) { Chef::Resource::User.new("notarealuser") }
 
-  it "sets the resource_name to :user" do
-    expect(resource.resource_name).to eql(:user_resource_abstract_base_class)
+  it "sets the resource_name to nil" do
+    expect(resource.resource_name).to eql(nil)
   end
 
-  it "sets the username equal to the argument to initialize" do
-    expect(resource.username).to eql("adam")
+  it "username property is the name property" do
+    expect(resource.username).to eql("notarealuser")
   end
 
-  %w{comment uid gid home shell password}.each do |attrib|
-    it "sets #{attrib} to nil" do
-      expect(resource.send(attrib)).to eql(nil)
+  %w{comment uid gid home shell password}.each do |prop|
+    it "sets #{prop} to nil" do
+      expect(resource.send(prop)).to eql(nil)
     end
   end
 
@@ -39,22 +39,21 @@ describe Chef::Resource::User, "initialize" do
     expect(resource.action).to eql([:create])
   end
 
-  it "sets manage_home to false" do
-    expect(resource.manage_home).to eql(false)
-  end
-
-  it "sets non_unique to false" do
-    expect(resource.non_unique).to eql(false)
-  end
-
-  it "sets force to false" do
-    expect(resource.force).to eql(false)
+  %w{manage_home non_unique force system}.each do |prop|
+    it "sets #{prop} to false" do
+      expect(resource.send(prop)).to eql(false)
+    end
   end
 
   %w{create remove modify manage lock unlock}.each do |action|
     it "allows action #{action}" do
       expect(resource.allowed_actions.detect { |a| a == action.to_sym }).to eql(action.to_sym)
     end
+  end
+
+  it "group is an alias for the gid property" do
+    resource.group(1234)
+    expect(resource.gid).to eql(1234)
   end
 
   it "accepts domain users (@ or \ separator) on non-windows" do
@@ -67,22 +66,22 @@ end
 
 %w{username comment home shell password}.each do |attrib|
   describe Chef::Resource::User, attrib do
-    let(:resource) { Chef::Resource::User.new("adam") }
+    let(:resource) { Chef::Resource::User.new("notarealuser") }
 
     it "allows a string" do
-      resource.send(attrib, "adam")
-      expect(resource.send(attrib)).to eql("adam")
+      resource.send(attrib, "something")
+      expect(resource.send(attrib)).to eql("something")
     end
 
     it "does not allow a hash" do
-      expect { resource.send(attrib, { :woot => "i found it" }) }.to raise_error(ArgumentError)
+      expect { resource.send(attrib, { woot: "i found it" }) }.to raise_error(ArgumentError)
     end
   end
 end
 
 %w{uid gid}.each do |attrib|
   describe Chef::Resource::User, attrib do
-    let(:resource) { Chef::Resource::User.new("adam") }
+    let(:resource) { Chef::Resource::User.new("notarealuser") }
 
     it "allows a string" do
       resource.send(attrib, "100")
@@ -95,7 +94,7 @@ end
     end
 
     it "does not allow a hash" do
-      expect { resource.send(attrib, { :woot => "i found it" }) }.to raise_error(ArgumentError)
+      expect { resource.send(attrib, { woot: "i found it" }) }.to raise_error(ArgumentError)
     end
   end
 

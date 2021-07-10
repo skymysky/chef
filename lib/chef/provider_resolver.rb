@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/exceptions"
-require "chef/platform/priority_map"
+require_relative "exceptions"
+require_relative "platform/priority_map"
 
 class Chef
   #
@@ -113,7 +113,7 @@ class Chef
 
     # if resource.provider is set, just return one of those objects
     def maybe_explicit_provider(resource)
-      resource.provider if resource.provider
+      resource.provider
     end
 
     # try dynamically finding a provider based on querying the providers to see what they support

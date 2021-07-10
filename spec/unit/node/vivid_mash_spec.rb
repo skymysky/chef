@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -61,7 +61,7 @@ describe Chef::Node::VividMash do
 
     it "deep converts values through arrays" do
       expect(root).to receive(:reset_cache).with("foo")
-      vivid["foo"] = [ { :bar => true } ]
+      vivid["foo"] = [ { bar: true } ]
       expect(vivid["foo"].class).to eql(Chef::Node::AttrArray)
       expect(vivid["foo"][0].class).to eql(Chef::Node::VividMash)
       expect(vivid["foo"][0]["bar"]).to be true
@@ -69,7 +69,7 @@ describe Chef::Node::VividMash do
 
     it "deep converts values through nested arrays" do
       expect(root).to receive(:reset_cache).with("foo")
-      vivid["foo"] = [ [ { :bar => true } ] ]
+      vivid["foo"] = [ [ { bar: true } ] ]
       expect(vivid["foo"].class).to eql(Chef::Node::AttrArray)
       expect(vivid["foo"][0].class).to eql(Chef::Node::AttrArray)
       expect(vivid["foo"][0][0].class).to eql(Chef::Node::VividMash)
@@ -78,7 +78,7 @@ describe Chef::Node::VividMash do
 
     it "deep converts values through hashes" do
       expect(root).to receive(:reset_cache).with("foo")
-      vivid["foo"] = { baz: { :bar => true } }
+      vivid["foo"] = { baz: { bar: true } }
       expect(vivid["foo"]).to be_an_instance_of(Chef::Node::VividMash)
       expect(vivid["foo"]["baz"]).to be_an_instance_of(Chef::Node::VividMash)
       expect(vivid["foo"]["baz"]["bar"]).to be true
@@ -163,15 +163,15 @@ describe Chef::Node::VividMash do
     end
 
     it "throws an exception when attributes do not exist" do
-      expect { vivid.read!("one", "five", "six") }.to raise_error(Chef::Exceptions::NoSuchAttribute)
+      expect { vivid.read!("one", "five", "six") }.to raise_error(Chef::Exceptions::NoSuchAttribute, "one.five.six")
     end
 
     it "throws an exception when traversing a non-container" do
-      expect { vivid.read!("one", "two", "three", "four") }.to raise_error(Chef::Exceptions::NoSuchAttribute)
+      expect { vivid.read!("one", "two", "three", "four") }.to raise_error(Chef::Exceptions::NoSuchAttribute, "one.two.three.four")
     end
 
     it "throws an exception when an array element does not exist" do
-      expect { vivid.read!("array", 3) }.to raise_error(Chef::Exceptions::NoSuchAttribute)
+      expect { vivid.read!("array", 3) }.to raise_error(Chef::Exceptions::NoSuchAttribute, "array.3")
     end
   end
 
@@ -348,6 +348,111 @@ describe Chef::Node::VividMash do
       expect(root).not_to receive(:reset_cache)
       expect { vivid.unlink!("nil", "foo") }.to raise_error(Chef::Exceptions::NoSuchAttribute)
       expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+  end
+end
+
+describe Chef::Node::AttrArray do
+  let(:root) { instance_double(Chef::Node::Attribute) }
+
+  let(:array) do
+    Chef::Node::AttrArray.new(
+      %w{zero one two},
+      root
+    )
+  end
+
+  context "#<<" do
+    it "converts a Hash appended with #<< to a VividMash" do
+      array << { "three" => "four" }
+      expect(array[3].class).to eql(Chef::Node::VividMash)
+    end
+
+    it "deeply converts objects appended with #<<" do
+      array << [ { "three" => [ 0, 1] } ]
+      expect(array[3].class).to eql(Chef::Node::AttrArray)
+      expect(array[3][0].class).to eql(Chef::Node::VividMash)
+      expect(array[3][0]["three"].class).to eql(Chef::Node::AttrArray)
+    end
+  end
+
+  context "#[]=" do
+    it "assigning a Hash into an array converts it to VividMash" do
+      array[0] = { "zero" => "zero2" }
+      expect(array[0].class).to eql(Chef::Node::VividMash)
+    end
+  end
+
+  context "#push" do
+    it "pushing a Hash into an array converts it to VividMash" do
+      array.push({ "three" => "four" })
+      expect(array[3].class).to eql(Chef::Node::VividMash)
+    end
+  end
+
+  context "#unshift" do
+    it "unshifting a Hash into an array converts it to VividMash" do
+      array.unshift({ "zero" => "zero2" })
+      expect(array[0].class).to eql(Chef::Node::VividMash)
+    end
+  end
+
+  context "#insert" do
+    it "inserting a Hash into an array converts it to VividMash" do
+      array.insert(1, { "zero" => "zero2" })
+      expect(array[1].class).to eql(Chef::Node::VividMash)
+    end
+  end
+
+  context "#collect!" do
+    it "converts Hashes" do
+      array.collect! { |x| { "zero" => "zero2" } }
+      expect(array[1].class).to eql(Chef::Node::VividMash)
+    end
+  end
+
+  context "#map!" do
+    it "converts Hashes" do
+      array.map! { |x| { "zero" => "zero2" } }
+      expect(array[1].class).to eql(Chef::Node::VividMash)
+    end
+  end
+
+  context "#compact!" do
+    it "VividMashes remain VividMashes" do
+      array = Chef::Node::AttrArray.new(
+        [ nil, { "one" => "two" }, nil ],
+        root
+      )
+      expect(array[1].class).to eql(Chef::Node::VividMash)
+      array.compact!
+      expect(array[0].class).to eql(Chef::Node::VividMash)
+    end
+  end
+
+  context "#fill" do
+    it "inserts VividMashes for Hashes" do
+      array.fill({ "one" => "two" })
+      expect(array[0].class).to eql(Chef::Node::VividMash)
+    end
+  end
+
+  context "#flatten!" do
+    it "flattens sub-arrays maintaining VividMashes in them" do
+      array = Chef::Node::AttrArray.new(
+        [ [ { "one" => "two" } ], [ { "one" => "two" } ] ],
+        root
+      )
+      expect(array[0][0].class).to eql(Chef::Node::VividMash)
+      array.flatten!
+      expect(array[0].class).to eql(Chef::Node::VividMash)
+    end
+  end
+
+  context "#replace" do
+    it "replaces the array converting hashes to mashes" do
+      array.replace([ { "foo" => "bar" } ])
+      expect(array[0].class).to eql(Chef::Node::VividMash)
     end
   end
 end

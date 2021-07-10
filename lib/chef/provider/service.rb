@@ -1,7 +1,7 @@
 #
 # Author:: AJ Christensen (<aj@hjksolutions.com>)
 # Author:: Davide Cavalca (<dcavalca@fb.com>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,11 +17,14 @@
 # limitations under the License.
 #
 
-require "chef/provider"
+require_relative "../provider"
+require "chef-utils" unless defined?(ChefUtils::CANARY)
 
 class Chef
   class Provider
     class Service < Chef::Provider
+      include Chef::Platform::ServiceHelpers
+      extend Chef::Platform::ServiceHelpers
 
       def supports
         @supports ||= new_resource.supports.dup
@@ -77,9 +80,9 @@ class Chef
         end
       end
 
-      def action_enable
+      action :enable do
         if current_resource.enabled
-          logger.trace("#{new_resource} already enabled - nothing to do")
+          logger.debug("#{new_resource} already enabled - nothing to do")
         else
           converge_by("enable service #{new_resource}") do
             enable_service
@@ -90,22 +93,22 @@ class Chef
         new_resource.enabled(true)
       end
 
-      def action_disable
+      action :disable do
         if current_resource.enabled
           converge_by("disable service #{new_resource}") do
             disable_service
             logger.info("#{new_resource} disabled")
           end
         else
-          logger.trace("#{new_resource} already disabled - nothing to do")
+          logger.debug("#{new_resource} already disabled - nothing to do")
         end
         load_new_resource_state
         new_resource.enabled(false)
       end
 
-      def action_mask
+      action :mask do
         if current_resource.masked
-          logger.trace("#{new_resource} already masked - nothing to do")
+          logger.debug("#{new_resource} already masked - nothing to do")
         else
           converge_by("mask service #{new_resource}") do
             mask_service
@@ -116,46 +119,46 @@ class Chef
         new_resource.masked(true)
       end
 
-      def action_unmask
+      action :unmask do
         if current_resource.masked
           converge_by("unmask service #{new_resource}") do
             unmask_service
             logger.info("#{new_resource} unmasked")
           end
         else
-          logger.trace("#{new_resource} already unmasked - nothing to do")
+          logger.debug("#{new_resource} already unmasked - nothing to do")
         end
         load_new_resource_state
         new_resource.masked(false)
       end
 
-      def action_start
+      action :start do
         unless current_resource.running
           converge_by("start service #{new_resource}") do
             start_service
             logger.info("#{new_resource} started")
           end
         else
-          logger.trace("#{new_resource} already running - nothing to do")
+          logger.debug("#{new_resource} already running - nothing to do")
         end
         load_new_resource_state
         new_resource.running(true)
       end
 
-      def action_stop
+      action :stop do
         if current_resource.running
           converge_by("stop service #{new_resource}") do
             stop_service
             logger.info("#{new_resource} stopped")
           end
         else
-          logger.trace("#{new_resource} already stopped - nothing to do")
+          logger.debug("#{new_resource} already stopped - nothing to do")
         end
         load_new_resource_state
         new_resource.running(false)
       end
 
-      def action_restart
+      action :restart do
         converge_by("restart service #{new_resource}") do
           restart_service
           logger.info("#{new_resource} restarted")
@@ -164,7 +167,7 @@ class Chef
         new_resource.running(true)
       end
 
-      def action_reload
+      action :reload do
         if current_resource.running
           converge_by("reload service #{new_resource}") do
             reload_service
@@ -232,20 +235,20 @@ class Chef
         # Linux
         #
 
-        require "chef/chef_class"
-        require "chef/provider/service/systemd"
-        require "chef/provider/service/insserv"
-        require "chef/provider/service/redhat"
-        require "chef/provider/service/arch"
-        require "chef/provider/service/gentoo"
-        require "chef/provider/service/upstart"
-        require "chef/provider/service/debian"
-        require "chef/provider/service/invokercd"
+        require_relative "../chef_class"
+        require_relative "service/systemd"
+        require_relative "service/insserv"
+        require_relative "service/redhat"
+        require_relative "service/arch"
+        require_relative "service/gentoo"
+        require_relative "service/upstart"
+        require_relative "service/debian"
+        require_relative "service/invokercd"
 
         Chef.set_provider_priority_array :service, [ Systemd, Arch ], platform_family: "arch"
         Chef.set_provider_priority_array :service, [ Systemd, Gentoo ], platform_family: "gentoo"
         Chef.set_provider_priority_array :service, [ Systemd, Upstart, Insserv, Debian, Invokercd ], platform_family: "debian"
-        Chef.set_provider_priority_array :service, [ Systemd, Insserv, Redhat ], platform_family: %w{rhel fedora suse amazon}
+        Chef.set_provider_priority_array :service, [ Systemd, Insserv, Redhat ], platform_family: "rpm_based"
       end
     end
   end

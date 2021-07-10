@@ -1,7 +1,7 @@
 #
 # Author:: Adam Edwards (<adamed@chef.io>)
 #
-# Copyright:: Copyright 2014-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,10 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-require "chef/util/powershell/cmdlet"
-require "chef/util/dsc/local_configuration_manager"
-require "chef/mixin/powershell_type_coercions"
-require "chef/util/dsc/resource_store"
+require "timeout" unless defined?(Timeout)
+require_relative "../mixin/powershell_exec"
+require_relative "../util/dsc/local_configuration_manager"
+require_relative "../mixin/powershell_type_coercions"
+require_relative "../util/dsc/resource_store"
 
 class Chef
   class Provider
@@ -33,8 +34,8 @@ class Chef
         @reboot_resource = nil
       end
 
-      def action_run
-        if ! test_resource
+      action :run do
+        unless test_resource
           converge_by(generate_description) do
             result = set_resource
             reboot_if_required
@@ -42,16 +43,15 @@ class Chef
         end
       end
 
-      def load_current_resource
-      end
+      def load_current_resource; end
 
       def define_resource_requirements
         requirements.assert(:run) do |a|
           a.assertion { supports_dsc_invoke_resource? }
-          err = ["You must have Powershell version >= 5.0.10018.0 to use dsc_resource."]
+          err = ["You must have PowerShell version >= 5.0.10018.0 to use dsc_resource."]
           a.failure_message Chef::Exceptions::ProviderNotFound,
             err
-          a.whyrun err + ["Assuming a previous resource installs Powershell 5.0.10018.0 or higher."]
+          a.whyrun err + ["Assuming a previous resource installs PowerShell 5.0.10018.0 or higher."]
           a.block_action!
         end
         requirements.assert(:run) do |a|
@@ -131,27 +131,27 @@ class Chef
       def test_resource
         result = invoke_resource(:test)
         add_dsc_verbose_log(result)
-        return_dsc_resource_result(result, "InDesiredState")
+        result.result["InDesiredState"]
       end
 
       def set_resource
         result = invoke_resource(:set)
         add_dsc_verbose_log(result)
-        create_reboot_resource if return_dsc_resource_result(result, "RebootRequired")
-        result.return_value
+        create_reboot_resource if result.result["RebootRequired"]
+        result
       end
 
       def add_dsc_verbose_log(result)
         # We really want this information from the verbose stream,
         # however in some versions of WMF, Invoke-DscResource is not correctly
         # writing to that stream and instead just dumping to stdout
-        verbose_output = result.stream(:verbose)
-        verbose_output = result.stdout if verbose_output.empty?
+        verbose_output = result.verbose.join("\n")
+        verbose_output = result.result if verbose_output.empty?
 
         if @converge_description.nil? || @converge_description.empty?
           @converge_description = verbose_output
         else
-          @converge_description << "\n"
+          @converge_description << "\n\n"
           @converge_description << verbose_output
         end
       end
@@ -160,26 +160,13 @@ class Chef
         @module_version.nil? ? module_name : "@{ModuleName='#{module_name}';ModuleVersion='#{@module_version}'}"
       end
 
-      def invoke_resource(method, output_format = :object)
+      def invoke_resource(method)
         properties = translate_type(new_resource.properties)
         switches = "-Method #{method} -Name #{new_resource.resource}"\
                    " -Property #{properties} -Module #{module_info_object} -Verbose"
-        cmdlet = Chef::Util::Powershell::Cmdlet.new(
-          node,
-          "Invoke-DscResource #{switches}",
-          output_format
-        )
-        cmdlet.run!({}, { :timeout => new_resource.timeout })
-      end
-
-      def return_dsc_resource_result(result, property_name)
-        if result.return_value.is_a?(Array)
-          # WMF Feb 2015 Preview
-          result.return_value[0][property_name]
-        else
-          # WMF April 2015 Preview
-          result.return_value[property_name]
-        end
+        Timeout.timeout(new_resource.timeout) {
+          powershell_exec!("Invoke-DscResource #{switches}")
+        }
       end
 
       def create_reboot_resource

@@ -1,6 +1,7 @@
+# rubocop: disable Performance/InefficientHashSearch
 #
 # Author:: Lamont Granquist (<lamont@chef.io>)
-# Copyright:: Copyright 2013-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +17,8 @@
 # limitations under the License.
 #
 
-require "chef/mixin/template"
-require "chef/file_content_management/content_base"
+require_relative "../../mixin/template"
+require_relative "../../file_content_management/content_base"
 
 class Chef
   class Provider
@@ -28,9 +29,7 @@ class Chef
         include Chef::Mixin::Template
 
         def template_location
-          @template_file_cache_location ||= begin
-            template_finder.find(new_resource.source, :local => new_resource.local, :cookbook => new_resource.cookbook)
-          end
+          @template_file_cache_location ||= template_finder.find(new_resource.source, local: new_resource.local, cookbook: new_resource.cookbook)
         end
 
         private
@@ -64,7 +63,7 @@ class Chef
           context[:template_finder] = template_finder
 
           # helper variables
-          context[:cookbook_name] = new_resource.cookbook_name unless context.keys.include?(:coookbook_name)
+          context[:cookbook_name] = new_resource.cookbook_name unless context.keys.include?(:cookbook_name)
           context[:recipe_name] = new_resource.recipe_name unless context.keys.include?(:recipe_name)
           context[:recipe_line_string] = new_resource.source_line unless context.keys.include?(:recipe_line_string)
           context[:recipe_path] = new_resource.source_line_file unless context.keys.include?(:recipe_path)
@@ -83,9 +82,7 @@ class Chef
         end
 
         def template_finder
-          @template_finder ||= begin
-            TemplateFinder.new(run_context, new_resource.cookbook_name, run_context.node)
-          end
+          @template_finder ||= TemplateFinder.new(run_context, new_resource.cookbook_name, run_context.node)
         end
       end
     end

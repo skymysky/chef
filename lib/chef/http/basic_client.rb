@@ -5,7 +5,7 @@
 # Author:: Christopher Brown (<cb@chef.io>)
 # Author:: Christopher Walters (<cw@chef.io>)
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2009-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,10 +20,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-require "uri"
-require "net/http"
-require "chef/http/ssl_policies"
-require "chef/http/http_request"
+autoload :URI, "uri"
+module Net
+  autoload :HTTP, "net/http"
+end
+require_relative "ssl_policies"
+require_relative "http_request"
 
 class Chef
   class HTTP
@@ -135,7 +137,7 @@ class Chef
         else
           Chef::Log.trace("Using #{proxy_uri.host}:#{proxy_uri.port} for proxy")
           Net::HTTP.Proxy(proxy_uri.host, proxy_uri.port, http_proxy_user(proxy_uri),
-                          http_proxy_pass(proxy_uri))
+            http_proxy_pass(proxy_uri))
         end
       end
 

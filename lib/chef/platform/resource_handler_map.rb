@@ -1,6 +1,6 @@
 #
 # Author:: John Keiser (<jkeiser@chef.io>)
-# Copyright:: Copyright 2015-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "singleton"
-require "chef/node_map"
+require "singleton" unless defined?(Singleton)
+require_relative "../node_map"
 
 class Chef
   class Platform

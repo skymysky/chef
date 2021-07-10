@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2017-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +21,7 @@ require "spec_helper"
 
 describe Chef::Provider::Package::Yum::PythonHelper do
   let(:helper) { Chef::Provider::Package::Yum::PythonHelper.instance }
+  before(:each) { Singleton.__init__(Chef::Provider::Package::Yum::PythonHelper) }
 
   it "propagates stacktraces on stderr from the forked subprocess", :rhel do
     allow(helper).to receive(:yum_command).and_return("ruby -e 'raise \"your hands in the air\"'")

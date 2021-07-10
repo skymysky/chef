@@ -1,7 +1,7 @@
 #
 # Author:: Adam Edwards (<adamed@chef.io>)
 #
-# Copyright:: Copyright 2014-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,18 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-require "chef/dsl/powershell"
+require_relative "../dsl/powershell"
 
 class Chef
   class Resource
     class DscResource < Chef::Resource
-      resource_name :dsc_resource
+      unified_mode true
+
       provides :dsc_resource
 
-      description "The dsc_resource resource allows any DSC resource to be used in a"\
-                  " Chef recipe, as well as any custom resources that have been added"\
-                  " to your Windows PowerShell environment. Microsoft frequently adds"\
-                  " new resources to the DSC resource collection."
+      description "The dsc_resource resource allows any DSC resource to be used in a recipe, as well as any custom resources that have been added to your Windows PowerShell environment. Microsoft frequently adds new resources to the DSC resource collection."
       introduced "12.2"
 
       # This class will check if the object responds to
@@ -44,7 +42,7 @@ class Chef
                        end
             "#{property}=>#{obj_text}"
           end
-          "{#{descriptions.join(', ')}}"
+          "{#{descriptions.join(", ")}}"
         end
       end
 
@@ -74,10 +72,12 @@ class Chef
         end
       end
 
-      property :module_version, String
+      property :module_version, String,
+        introduced: "12.21",
+        description: "The version number of the module to use. PowerShell 5.0.10018.0 (or higher) supports having multiple versions of a module installed. This should be specified along with the `module_name` property."
 
       def property(property_name, value = nil)
-        if not property_name.is_a?(Symbol)
+        unless property_name.is_a?(Symbol)
           raise TypeError, "A property name of type Symbol must be specified, '#{property_name}' of type #{property_name.class} was given"
         end
 
@@ -99,9 +99,14 @@ class Chef
       # If the set method of the DSC resource indicate that a reboot
       # is necessary, reboot_action provides the mechanism for a reboot to
       # be requested.
-      property :reboot_action, Symbol, default: :nothing, equal_to: [:nothing, :reboot_now, :request_reboot]
+      property :reboot_action, Symbol, default: :nothing, equal_to: %i{nothing reboot_now request_reboot},
+        introduced: "12.6",
+        description: "Use to request an immediate reboot or to queue a reboot using the :reboot_now (immediate reboot) or :request_reboot (queued reboot) actions built into the reboot resource."
 
-      property :timeout, Integer
+      property :timeout, Integer,
+        introduced: "12.6",
+        description: "The amount of time (in seconds) a command is to wait before timing out.",
+        desired_state: false
 
       private
 

@@ -1,5 +1,5 @@
 #
-# Copyright 2012-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,11 +15,11 @@
 #
 
 name "chef"
-friendly_name "Chef Client"
+friendly_name "Chef Infra Client"
 maintainer "Chef Software, Inc. <maintainers@chef.io>"
 homepage "https://www.chef.io"
-license "Apache-2.0"
-license_file "../LICENSE"
+license "Chef EULA"
+license_file "CHEF-EULA.md"
 
 build_iteration 1
 # Do not use __FILE__ after this point, use current_file. If you use __FILE__
@@ -47,11 +47,6 @@ instance_eval(IO.read(overrides_path), overrides_path)
 
 dependency "preparation"
 
-# InSpec 2 depends on unf_ext, which doesn't currently build on solaris on aix. There exists a fork
-# of unf_ext which fixes this, so let's use that in Chef for now.
-# FIXME: must remove this ASAP.
-dependency "unf_ext"
-
 dependency "chef"
 
 #
@@ -73,13 +68,15 @@ if windows?
   dependency "ruby-windows-devkit-bash"
 end
 
+dependency "ruby-cleanup"
+
+# further gem cleanup other projects might not yet want to use
+dependency "more-ruby-cleanup"
+
 package :rpm do
   signing_passphrase ENV["OMNIBUS_RPM_SIGNING_PASSPHRASE"]
-
-  unless rhel? && platform_version.satisfies?("< 6")
-    compression_level 1
-    compression_type :xz
-  end
+  compression_level 1
+  compression_type :xz
 end
 
 package :deb do
@@ -87,10 +84,10 @@ package :deb do
   compression_type :xz
 end
 
-proj_to_work_around_cleanroom = self
+proj_to_work_around_cleanroom = self # wat voodoo hackery is this?
 package :pkg do
   identifier "com.getchef.pkg.#{proj_to_work_around_cleanroom.name}"
-  signing_identity "Developer ID Installer: Chef Software, Inc. (EU3VF8YLX2)"
+  signing_identity "Chef Software, Inc. (EU3VF8YLX2)"
 end
 compress :dmg
 
@@ -101,11 +98,12 @@ package :msi do
   upgrade_code msi_upgrade_code
   wix_candle_extension "WixUtilExtension"
   wix_light_extension "WixUtilExtension"
-  signing_identity "E05FF095D07F233B78EB322132BFF0F035E11B5B", machine_store: true
+  signing_identity "AF21BA8C9E50AE20DA9907B6E2D4B0CC3306CA03", machine_store: true
   parameters ChefLogDllPath: windows_safe_path(gem_path("chef-[0-9]*-mingw32/ext/win32-eventlog/chef-log.dll")),
              ProjectLocationDir: project_location_dir
 end
 
+# We don't support appx builds, and they eat a lot of time.
 package :appx do
-  signing_identity "E05FF095D07F233B78EB322132BFF0F035E11B5B", machine_store: true
+  skip_packager true
 end

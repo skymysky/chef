@@ -1,6 +1,6 @@
 #
 # Author:: Adam Edwards (<adamed@chef.io>)
-# Copyright:: Copyright 2014-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,7 +38,7 @@ describe Chef::Resource::WindowsEnv, :windows_only do
       if environment_variables && environment_variables.length > 0
         environment_variables.each do |env|
           env_obj = env.wmi_ole_object
-          return env_obj if env_obj.username.split('\\').last.casecmp(test_resource.user) == 0
+          return env_obj if env_obj.username.split("\\").last.casecmp(test_resource.user) == 0
         end
       end
       nil
@@ -93,7 +93,7 @@ describe Chef::Resource::WindowsEnv, :windows_only do
         test_resource.value(env_value1)
         test_resource.user(env_user)
         test_resource.run_action(:create)
-        expect(env_obj.username.split('\\').last.upcase).to eq(env_user)
+        expect(env_obj.username.split("\\").last.upcase).to eq(env_user)
       end
 
       context "when env variable exist with same name" do
@@ -159,7 +159,7 @@ describe Chef::Resource::WindowsEnv, :windows_only do
           expect(ENV[chef_env_test_lower_case]).to eq(env_value2)
         end
 
-        # This examlpe covers Chef Issue #1754
+        # This example covers Chef Issue #1754
         it "should modify an existing variable's value to a new value if the variable name case differs from the existing variable" do
           expect(ENV[chef_env_test_lower_case]).to eq(env_value1)
           test_resource.key_name(chef_env_test_mixed_case)
@@ -188,7 +188,7 @@ describe Chef::Resource::WindowsEnv, :windows_only do
           test_resource.value("#{path_before};#{env_val}")
           test_resource.run_action(:create)
           expect(ENV["PATH"]).not_to include(env_val)
-          expect(ENV["PATH"]).to include("#{random_name}")
+          expect(ENV["PATH"]).to include((random_name).to_s)
         end
 
         after(:each) do

@@ -1,3 +1,4 @@
+require "spec_helper"
 require "support/shared/integration/integration_helper"
 
 describe "Recipe DSL methods" do
@@ -15,10 +16,10 @@ describe "Recipe DSL methods" do
     before(:each) do
 
       class BaseThingy < Chef::Resource
-        resource_name "base_thingy"
+        provides :base_thingy
         default_action :create
 
-        class<<self
+        class << self
           attr_accessor :created_name
           attr_accessor :created_resource
           attr_accessor :created_provider
@@ -27,9 +28,9 @@ describe "Recipe DSL methods" do
         def provider
           Provider
         end
+
         class Provider < Chef::Provider
-          def load_current_resource
-          end
+          def load_current_resource; end
 
           def action_create
             BaseThingy.created_name = new_resource.name
@@ -68,7 +69,6 @@ describe "Recipe DSL methods" do
     context "nameless resources" do
       before(:each) do
         class NamelessThingy < BaseThingy
-          resource_name :nameless_thingy
           provides :nameless_thingy
 
           property :name, String, default: ""
@@ -125,7 +125,7 @@ describe "Recipe DSL methods" do
         before(:each) do
 
           class AnotherNoNameThingy < BaseThingy
-            resource_name :another_thingy_name
+            provides :another_thingy_name
           end
 
         end
@@ -149,8 +149,8 @@ describe "Recipe DSL methods" do
         before(:each) do
 
           class AnotherNoNameThingy2 < BaseThingy
-            resource_name :another_thingy_name2
-            resource_name :another_thingy_name3
+            provides :another_thingy_name2
+            provides :another_thingy_name3
           end
 
         end
@@ -161,10 +161,12 @@ describe "Recipe DSL methods" do
           end.to raise_error(NoMethodError)
         end
 
-        it "another_thingy_name2 does not work" do
-          expect_converge do
+        it "another_thingy_name2 works" do
+          recipe = converge do
             another_thingy_name2("blah") {}
-          end.to raise_error(NoMethodError)
+          end
+          expect(recipe.logged_warnings).to eq ""
+          expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy2)
         end
 
         it "yet_another_thingy_name3 works" do
@@ -181,7 +183,7 @@ describe "Recipe DSL methods" do
           before(:each) do
 
             class AnotherNoNameThingy3 < BaseThingy
-              resource_name :another_no_name_thingy_3
+              provides :another_no_name_thingy_3
               provides :another_no_name_thingy3, os: "blarghle"
             end
 
@@ -202,7 +204,7 @@ describe "Recipe DSL methods" do
               another_no_name_thingy3("blah") {}
             end
             expect(recipe.logged_warnings).to eq ""
-            expect(BaseThingy.created_resource).to eq (AnotherNoNameThingy3)
+            expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy3)
           end
         end
 
@@ -210,7 +212,7 @@ describe "Recipe DSL methods" do
           before(:each) do
 
             class AnotherNoNameThingy4 < BaseThingy
-              resource_name :another_no_name_thingy_4
+              provides :another_no_name_thingy_4
               provides :another_no_name_thingy4, os: "blarghle"
               provides :another_no_name_thingy4, platform_family: "foo"
             end
@@ -232,7 +234,7 @@ describe "Recipe DSL methods" do
               another_no_name_thingy4("blah") {}
             end
             expect(recipe.logged_warnings).to eq ""
-            expect(BaseThingy.created_resource).to eq (AnotherNoNameThingy4)
+            expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy4)
           end
 
           it "and platform_family = foo, another_no_name_thingy4 works" do
@@ -242,7 +244,7 @@ describe "Recipe DSL methods" do
               another_no_name_thingy4("blah") {}
             end
             expect(recipe.logged_warnings).to eq ""
-            expect(BaseThingy.created_resource).to eq (AnotherNoNameThingy4)
+            expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy4)
           end
         end
 
@@ -250,7 +252,7 @@ describe "Recipe DSL methods" do
           before(:each) do
 
             class AnotherNoNameThingy5 < BaseThingy
-              resource_name :another_thingy_name_for_another_no_name_thingy5
+              provides :another_thingy_name_for_another_no_name_thingy5
               provides :another_no_name_thingy5, os: "blarghle"
             end
 
@@ -271,7 +273,7 @@ describe "Recipe DSL methods" do
               another_no_name_thingy5("blah") {}
             end
             expect(recipe.logged_warnings).to eq ""
-            expect(BaseThingy.created_resource).to eq (AnotherNoNameThingy5)
+            expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy5)
           end
 
           it "the new resource name can be used in a recipe" do
@@ -279,7 +281,7 @@ describe "Recipe DSL methods" do
               another_thingy_name_for_another_no_name_thingy5("blah") {}
             end
             expect(recipe.logged_warnings).to eq ""
-            expect(BaseThingy.created_resource).to eq (AnotherNoNameThingy5)
+            expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy5)
           end
         end
 
@@ -288,7 +290,7 @@ describe "Recipe DSL methods" do
 
             class AnotherNoNameThingy6 < BaseThingy
               provides :another_no_name_thingy6, os: "blarghle"
-              resource_name :another_thingy_name_for_another_no_name_thingy6
+              provides :another_thingy_name_for_another_no_name_thingy6
             end
 
           end
@@ -308,7 +310,7 @@ describe "Recipe DSL methods" do
               another_no_name_thingy6("blah") {}
             end
             expect(recipe.logged_warnings).to eq ""
-            expect(BaseThingy.created_resource).to eq (AnotherNoNameThingy6)
+            expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy6)
           end
 
           it "the new resource name can be used in a recipe" do
@@ -316,7 +318,7 @@ describe "Recipe DSL methods" do
               another_thingy_name_for_another_no_name_thingy6("blah") {}
             end
             expect(recipe.logged_warnings).to eq ""
-            expect(BaseThingy.created_resource).to eq (AnotherNoNameThingy6)
+            expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy6)
           end
         end
 
@@ -324,18 +326,20 @@ describe "Recipe DSL methods" do
           before(:each) do
 
             class AnotherNoNameThingy7 < BaseThingy
-              resource_name :another_thingy_name_for_another_no_name_thingy7
+              provides :another_thingy_name_for_another_no_name_thingy7
               provides :another_thingy_name_for_another_no_name_thingy7, os: "blarghle"
             end
 
           end
 
-          it "and os = linux, another_thingy_name_for_another_no_name_thingy7 does not work" do
-            expect_converge do
+          it "and os = linux, another_thingy_name_for_another_no_name_thingy7 works" do
+            recipe = converge do
               # this is an ugly way to test, make Cheffish expose node attrs
               run_context.node.automatic[:os] = "linux"
               another_thingy_name_for_another_no_name_thingy7("blah") {}
-            end.to raise_error(Chef::Exceptions::NoSuchResourceType)
+            end
+            expect(recipe.logged_warnings).to eq ""
+            expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy7)
           end
 
           it "and os = blarghle, another_thingy_name_for_another_no_name_thingy7 works" do
@@ -345,7 +349,7 @@ describe "Recipe DSL methods" do
               another_thingy_name_for_another_no_name_thingy7("blah") {}
             end
             expect(recipe.logged_warnings).to eq ""
-            expect(BaseThingy.created_resource).to eq (AnotherNoNameThingy7)
+            expect(BaseThingy.created_resource).to eq(AnotherNoNameThingy7)
           end
 
           it "the old resource name does not work" do
@@ -357,43 +361,6 @@ describe "Recipe DSL methods" do
           end
         end
 
-        # opposite order from the previous test (provides, then resource_name)
-        context "with a resource named AnotherNoNameThingy8, a provides with a new resource name, and resource_name with that new resource name" do
-          before(:each) do
-
-            class AnotherNoNameThingy8 < BaseThingy
-              provides :another_thingy_name_for_another_no_name_thingy8, os: "blarghle"
-              resource_name :another_thingy_name_for_another_no_name_thingy8
-            end
-
-          end
-
-          it "and os = linux, another_thingy_name_for_another_no_name_thingy8 does not work" do
-            expect_converge do
-              # this is an ugly way to test, make Cheffish expose node attrs
-              run_context.node.automatic[:os] = "linux"
-              another_thingy_name_for_another_no_name_thingy8("blah") {}
-            end.to raise_error(Chef::Exceptions::NoSuchResourceType)
-          end
-
-          it "and os = blarghle, another_thingy_name_for_another_no_name_thingy8 works" do
-            recipe = converge do
-              # this is an ugly way to test, make Cheffish expose node attrs
-              run_context.node.automatic[:os] = "blarghle"
-              another_thingy_name_for_another_no_name_thingy8("blah") {}
-            end
-            expect(recipe.logged_warnings).to eq ""
-            expect(BaseThingy.created_resource).to eq (AnotherNoNameThingy8)
-          end
-
-          it "the old resource name does not work" do
-            expect_converge do
-              # this is an ugly way to test, make Cheffish expose node attrs
-              run_context.node.automatic[:os] = "linux"
-              another_thingy_name8("blah") {}
-            end.to raise_error(NoMethodError)
-          end
-        end
       end
     end
 
@@ -402,7 +369,7 @@ describe "Recipe DSL methods" do
         before(:each) do
 
           class RecipeDSLSpecNamespace::MySupplier < BaseThingy
-            resource_name :hemlock
+            provides :hemlock
           end
 
         end
@@ -425,7 +392,7 @@ describe "Recipe DSL methods" do
         before(:each) do
 
           class RecipeDSLSpecNamespace::Thingy3 < BaseThingy
-            resource_name :thingy3
+            provides :thingy3
           end
 
         end
@@ -441,7 +408,7 @@ describe "Recipe DSL methods" do
           before(:each) do
 
             class RecipeDSLSpecNamespace::Thingy4 < BaseThingy
-              resource_name :thingy3
+              provides :thingy3
             end
 
           end
@@ -469,7 +436,7 @@ describe "Recipe DSL methods" do
         before(:each) do
 
           class RecipeDSLSpecNamespace::Thingy5 < BaseThingy
-            resource_name :thingy5
+            provides :thingy5
             provides :thingy5reverse
             provides :thingy5_2
             provides :thingy5_2reverse
@@ -488,7 +455,7 @@ describe "Recipe DSL methods" do
           before(:each) do
 
             class RecipeDSLSpecNamespace::Thingy6 < BaseThingy
-              resource_name :thingy6
+              provides :thingy6
               provides :thingy5
             end
 
@@ -509,14 +476,14 @@ describe "Recipe DSL methods" do
           end
 
           it "resource_matching_short_name returns Thingy6" do
-            expect(Chef::Resource.resource_matching_short_name(:thingy5)).to eq RecipeDSLSpecNamespace::Thingy5
+            expect(Chef::Resource.resource_matching_short_name(:thingy5)).to eq RecipeDSLSpecNamespace::Thingy6
           end
 
           context "and AThingy5 provides :thingy5reverse" do
             before(:each) do
 
               class RecipeDSLSpecNamespace::AThingy5 < BaseThingy
-                resource_name :thingy5reverse
+                provides :thingy5reverse
               end
 
             end
@@ -534,7 +501,7 @@ describe "Recipe DSL methods" do
 
               module ZRecipeDSLSpecNamespace
                 class Thingy5 < BaseThingy
-                  resource_name :thingy5_2
+                  provides :thingy5_2
                 end
               end
 
@@ -553,7 +520,7 @@ describe "Recipe DSL methods" do
 
               module ARecipeDSLSpecNamespace
                 class Thingy5 < BaseThingy
-                  resource_name :thingy5_2reverse
+                  provides :thingy5_2reverse
                 end
               end
 
@@ -572,7 +539,7 @@ describe "Recipe DSL methods" do
           before(:each) do
 
             class RecipeDSLSpecNamespace::Thingy3 < BaseThingy
-              resource_name :thingy3
+              provides :thingy3
             end
 
           end
@@ -588,7 +555,7 @@ describe "Recipe DSL methods" do
             before(:each) do
 
               class RecipeDSLSpecNamespace::Thingy4 < BaseThingy
-                resource_name :thingy3
+                provides :thingy3
               end
 
             end
@@ -615,7 +582,7 @@ describe "Recipe DSL methods" do
             before(:each) do
 
               class RecipeDSLSpecNamespace::Thingy4 < BaseThingy
-                resource_name :thingy3
+                provides :thingy3
               end
 
             end
@@ -645,7 +612,7 @@ describe "Recipe DSL methods" do
         before(:each) do
 
           class RecipeDSLSpecNamespace::Thingy7 < BaseThingy
-            resource_name :thingy7
+            provides :thingy7
             provides :thingy8
           end
 
@@ -655,7 +622,7 @@ describe "Recipe DSL methods" do
           before(:each) do
 
             class RecipeDSLSpecNamespace::Thingy8 < BaseThingy
-              resource_name :thingy8
+              provides :thingy8
             end
 
           end
@@ -684,7 +651,7 @@ describe "Recipe DSL methods" do
         before(:each) do
 
           class RecipeDSLSpecNamespace::Thingy12 < BaseThingy
-            resource_name :thingy12
+            provides :thingy12
             provides :twizzle
             provides :twizzle2
           end
@@ -716,12 +683,12 @@ describe "Recipe DSL methods" do
       context "with platform-specific resources 'my_super_thingy_foo' and 'my_super_thingy_bar'" do
         before(:each) do
           class MySuperThingyFoo < BaseThingy
-            resource_name :my_super_thingy_foo
+            provides :my_super_thingy_foo
             provides :my_super_thingy, platform: "foo"
           end
 
           class MySuperThingyBar < BaseThingy
-            resource_name :my_super_thingy_bar
+            provides :my_super_thingy_bar
             provides :my_super_thingy, platform: "bar"
           end
         end
@@ -762,7 +729,7 @@ describe "Recipe DSL methods" do
       context "when Thingy10 provides :thingy10" do
         before(:each) do
           class RecipeDSLSpecNamespace::Thingy10 < BaseThingy
-            resource_name :thingy10
+            provides :thingy10
           end
         end
 
@@ -777,7 +744,7 @@ describe "Recipe DSL methods" do
       context "when Thingy11 provides :thingy11" do
         before(:each) do
           class RecipeDSLSpecNamespace::Thingy11 < BaseThingy
-            resource_name :thingy10
+            provides :thingy10
           end
         end
 
@@ -802,7 +769,7 @@ describe "Recipe DSL methods" do
 
           def self.inspect; name.inspect; end
         end
-        result.resource_name two_classes_one_dsl
+        result.provides two_classes_one_dsl
         result
       end
       before { resource_class } # pull on it so it gets defined before the recipe runs
@@ -818,7 +785,7 @@ describe "Recipe DSL methods" do
 
             def self.inspect; name.inspect; end
           end
-          result.resource_name two_classes_one_dsl
+          result.provides two_classes_one_dsl
           result
         end
         before { resource_class_a } # pull on it so it gets defined before the recipe runs
@@ -848,7 +815,7 @@ describe "Recipe DSL methods" do
 
             def self.inspect; name.inspect; end
           end
-          result.resource_name two_classes_one_dsl
+          result.provides two_classes_one_dsl
           result
         end
         before { resource_class_z } # pull on it so it gets defined before the recipe runs
@@ -883,25 +850,6 @@ describe "Recipe DSL methods" do
           it "resource_matching_short_name returns Z" do
             expect(Chef::Resource.resource_matching_short_name(two_classes_one_dsl)).to eq resource_class_z
           end
-
-          context "when Z provides(:two_classes_one_dsl) { false }" do
-            before do
-              resource_class_z.provides(two_classes_one_dsl) { false }
-            end
-
-            it "two_classes_one_dsl resolves to B (picks the next thing in the priority array)" do
-              temp_two_classes_one_dsl = two_classes_one_dsl
-              recipe = converge do
-                instance_eval("#{temp_two_classes_one_dsl} 'blah'")
-              end
-              expect(recipe.logged_warnings).to eq ""
-              expect(BaseThingy.created_resource).to eq resource_class
-            end
-
-            it "resource_matching_short_name returns B" do
-              expect(Chef::Resource.resource_matching_short_name(two_classes_one_dsl)).to eq resource_class
-            end
-          end
         end
 
         context "and priority arrays [ B ] and [ Z ]" do
@@ -922,52 +870,7 @@ describe "Recipe DSL methods" do
           it "resource_matching_short_name returns Z" do
             expect(Chef::Resource.resource_matching_short_name(two_classes_one_dsl)).to eq resource_class_z
           end
-
-          context "when Z provides(:two_classes_one_dsl) { false }" do
-            before do
-              resource_class_z.provides(two_classes_one_dsl) { false }
-            end
-
-            it "two_classes_one_dsl resolves to B (picks the first match from the other priority array)" do
-              temp_two_classes_one_dsl = two_classes_one_dsl
-              recipe = converge do
-                instance_eval("#{temp_two_classes_one_dsl} 'blah'")
-              end
-              expect(recipe.logged_warnings).to eq ""
-              expect(BaseThingy.created_resource).to eq resource_class
-            end
-
-            it "resource_matching_short_name returns B" do
-              expect(Chef::Resource.resource_matching_short_name(two_classes_one_dsl)).to eq resource_class
-            end
-          end
         end
-
-        context "and a priority array [ Z ]" do
-          before do
-            Chef.set_resource_priority_array(two_classes_one_dsl, [ resource_class_z ])
-          end
-
-          context "when Z provides(:two_classes_one_dsl) { false }" do
-            before do
-              resource_class_z.provides(two_classes_one_dsl) { false }
-            end
-
-            it "two_classes_one_dsl resolves to B (picks the first match outside the priority array)" do
-              temp_two_classes_one_dsl = two_classes_one_dsl
-              recipe = converge do
-                instance_eval("#{temp_two_classes_one_dsl} 'blah'")
-              end
-              expect(recipe.logged_warnings).to eq ""
-              expect(BaseThingy.created_resource).to eq resource_class
-            end
-
-            it "resource_matching_short_name returns B" do
-              expect(Chef::Resource.resource_matching_short_name(two_classes_one_dsl)).to eq resource_class
-            end
-          end
-        end
-
       end
 
       context "and a provider named 'B' which provides :two_classes_one_dsl" do
@@ -1114,7 +1017,7 @@ describe "Recipe DSL methods" do
 
             def self.inspect; name.inspect; end
           end
-          result.resource_name two_classes_one_dsl
+          result.provides two_classes_one_dsl
           result.provides two_classes_one_dsl, os: "blarghle"
           result
         end
@@ -1139,7 +1042,7 @@ describe "Recipe DSL methods" do
             instance_eval("#{temp_two_classes_one_dsl} 'blah' do; end")
           end
           expect(recipe.logged_warnings).to eq ""
-          expect(BaseThingy.created_resource).to eq resource_class
+          expect(BaseThingy.created_resource).to eq resource_class_blarghle
         end
       end
     end
@@ -1154,13 +1057,14 @@ describe "Recipe DSL methods" do
           def to_s
             "MyResource"
           end
-        end end
+        end
+      end
       let(:my_resource) { :"my_resource#{Namer.current_index}" }
       let(:blarghle_blarghle_little_star) { :"blarghle_blarghle_little_star#{Namer.current_index}" }
 
       context "with resource_name :my_resource" do
         before do
-          resource_class.resource_name my_resource
+          resource_class.provides my_resource
         end
 
         context "with provides? returning true to my_resource" do
@@ -1311,14 +1215,14 @@ describe "Recipe DSL methods" do
     context "with UTF-8 provides" do
       before(:each) do
         class UTF8Thingy < BaseThingy
-          resource_name :Straße
+          provides :Straße
           provides :Straße
         end
       end
 
       it "utf-8 dsl names work" do
         recipe = converge do
-          Straße("blah") {}
+          Straße("blah") {} # rubocop: disable Naming/AsciiIdentifiers
         end
         expect(recipe.logged_warnings).to eq ""
         expect(BaseThingy.created_resource).to eq(UTF8Thingy)
@@ -1330,6 +1234,10 @@ describe "Recipe DSL methods" do
   before { Namer.current_index += 1 }
 
   context "with an LWRP that declares actions" do
+    let(:run_context) do
+      Chef::RunContext.new(Chef::Node.new, {}, Chef::EventDispatch::Dispatcher.new)
+    end
+
     let(:resource_class) do
       Class.new(Chef::Resource::LWRPBase) do
         provides :"recipe_dsl_spec#{Namer.current_index}"
@@ -1340,10 +1248,10 @@ describe "Recipe DSL methods" do
       resource_class.new("blah", run_context)
     end
     it "The actions are part of actions along with :nothing" do
-      expect(resource_class.actions).to eq [ :nothing, :create ]
+      expect(resource_class.actions).to eq %i{nothing create}
     end
     it "The actions are part of allowed_actions along with :nothing" do
-      expect(resource.allowed_actions).to eq [ :nothing, :create ]
+      expect(resource.allowed_actions).to eq %i{nothing create}
     end
 
     context "and a subclass that declares more actions" do
@@ -1358,14 +1266,14 @@ describe "Recipe DSL methods" do
       end
 
       it "The parent class actions are not part of actions" do
-        expect(subresource_class.actions).to eq [ :nothing, :delete ]
+        expect(subresource_class.actions).to eq %i{nothing delete}
       end
       it "The parent class actions are not part of allowed_actions" do
-        expect(subresource.allowed_actions).to eq [ :nothing, :delete ]
+        expect(subresource.allowed_actions).to eq %i{nothing delete}
       end
       it "The parent class actions do not change" do
-        expect(resource_class.actions).to eq [ :nothing, :create ]
-        expect(resource.allowed_actions).to eq [ :nothing, :create ]
+        expect(resource_class.actions).to eq %i{nothing create}
+        expect(resource.allowed_actions).to eq %i{nothing create}
       end
     end
   end

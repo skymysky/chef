@@ -1,6 +1,6 @@
 #
 # Author:: Mal Graty (<mal.graty@googlemail.com>)
-# Copyright:: Copyright 2013-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require "chef/mixin/which"
+require_relative "../../../mixin/which"
 
 class Chef
   class Resource
@@ -46,6 +46,7 @@ class Chef
 
           def verify(path, opts = {})
             return true unless systemd_analyze_path
+
             Dir.mktmpdir("chef-systemd-unit") do |dir|
               temp = "#{dir}/#{::File.basename(@parent_resource.path)}"
               ::FileUtils.cp(path, temp)

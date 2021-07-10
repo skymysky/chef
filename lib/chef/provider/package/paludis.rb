@@ -1,6 +1,6 @@
 #
 # Author:: Vasiliy Tolstov (<v.tolstov@selfip.ru>)
-# Copyright:: Copyright 2014-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/provider/package"
-require "chef/resource/package"
+require_relative "../package"
+require_relative "../../resource/package"
 
 class Chef
   class Provider
@@ -35,9 +35,10 @@ class Chef
           installed = false
           re = Regexp.new("(.*)[[:blank:]](.*)[[:blank:]](.*)$")
 
-          shell_out_compact!("cave", "-L", "warning", "print-ids", "-M", "none", "-m", new_resource.package_name, "-f", "%c/%p %v %r\n").stdout.each_line do |line|
+          shell_out!("cave", "-L", "warning", "print-ids", "-M", "none", "-m", new_resource.package_name, "-f", "%c/%p %v %r\n").stdout.each_line do |line|
             res = re.match(line)
             next if res.nil?
+
             case res[3]
             when "accounts", "installed-accounts"
               next
@@ -58,7 +59,7 @@ class Chef
                 else
                   new_resource.package_name.to_s
                 end
-          shell_out_compact_timeout!("cave", "-L", "warning", "resolve", "-x", options, pkg)
+          shell_out!("cave", "-L", "warning", "resolve", "-x", options, pkg)
         end
 
         def upgrade_package(name, version)
@@ -72,7 +73,7 @@ class Chef
                   new_resource.package_name.to_s
                 end
 
-          shell_out_compact!("cave", "-L", "warning", "uninstall", "-x", options, pkg)
+          shell_out!("cave", "-L", "warning", "uninstall", "-x", options, pkg)
         end
 
         def purge_package(name, version)

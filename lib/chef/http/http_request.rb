@@ -5,7 +5,7 @@
 # Author:: Christopher Brown (<cb@chef.io>)
 # Author:: Christopher Walters (<cw@chef.io>)
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2009-2016, 2010-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,19 +20,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-require "uri"
-require "net/http"
+autoload :URI, "uri"
+autoload :CGI, "cgi"
+module Net
+  autoload :HTTP, "net/http"
+end
+require "chef-utils/dist" unless defined?(ChefUtils::Dist)
 
 # To load faster, we only want ohai's version string.
 # However, in ohai before 0.6.0, the version is defined
 # in ohai, not ohai/version
 begin
-  require "ohai/version" #used in user agent string.
+  require "ohai/version" # used in user agent string.
 rescue LoadError
-  require "ohai"
+  require "ohai" unless defined?(Ohai::System)
 end
 
-require "chef/version"
+require_relative "../version"
 
 class Chef
   class HTTP
@@ -40,7 +44,7 @@ class Chef
 
       engine = defined?(RUBY_ENGINE) ? RUBY_ENGINE : "ruby"
 
-      UA_COMMON = "/#{::Chef::VERSION} (#{engine}-#{RUBY_VERSION}-p#{RUBY_PATCHLEVEL}; ohai-#{Ohai::VERSION}; #{RUBY_PLATFORM}; +https://chef.io)"
+      UA_COMMON = "/#{::Chef::VERSION} (#{engine}-#{RUBY_VERSION}-p#{RUBY_PATCHLEVEL}; ohai-#{Ohai::VERSION}; #{RUBY_PLATFORM}; +#{ChefUtils::Dist::Org::WEBSITE})".freeze
       DEFAULT_UA = "Chef Client" << UA_COMMON
 
       USER_AGENT = "User-Agent".freeze
@@ -100,7 +104,7 @@ class Chef
         @url.path.empty? ? SLASH : @url.path
       end
 
-      # DEPRECATED. Call request on an HTTP client object instead.
+      # @deprecated Call request on an HTTP client object instead.
       def call
         hide_net_http_bug do
           http_client.request(http_request) do |response|
@@ -114,7 +118,7 @@ class Chef
         Chef::Config
       end
 
-      # DEPRECATED. Call request on an HTTP client object instead.
+      # @deprecated Call request on an HTTP client object instead.
       def http_client
         @http_client ||= BasicClient.new(url).http_client
       end
@@ -126,7 +130,7 @@ class Chef
       rescue NoMethodError => e
         # http://redmine.ruby-lang.org/issues/show/2708
         # http://redmine.ruby-lang.org/issues/show/2758
-        if e.to_s =~ /#{Regexp.escape(%q{undefined method `closed?' for nil:NilClass})}/
+        if /#{Regexp.escape(%q{undefined method `closed?' for nil:NilClass})}/.match?(e.to_s)
           Chef::Log.trace("Rescued error in http connect, re-raising as Errno::ECONNREFUSED to hide bug in net/http")
           Chef::Log.trace("#{e.class.name}: #{e}")
           Chef::Log.trace(e.backtrace.join("\n"))
@@ -152,7 +156,7 @@ class Chef
       end
 
       def configure_http_request(request_body = nil)
-        req_path = "#{path}"
+        req_path = path.to_s.dup
         req_path << "?#{query}" if query
 
         @http_request = case method.to_s.downcase
@@ -175,8 +179,8 @@ class Chef
         @http_request.body = request_body if request_body && @http_request.request_body_permitted?
         # Optionally handle HTTP Basic Authentication
         if url.user
-          user = URI.unescape(url.user)
-          password = URI.unescape(url.password) if url.password
+          user = CGI.unescape(url.user)
+          password = CGI.unescape(url.password) if url.password
           @http_request.basic_auth(user, password)
         end
 

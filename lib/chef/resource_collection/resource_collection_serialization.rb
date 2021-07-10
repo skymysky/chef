@@ -1,6 +1,6 @@
 #
 # Author:: Tyler Ball (<tball@chef.io>)
-# Copyright:: Copyright 2014-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,14 +16,14 @@
 # limitations under the License.
 #
 
-require "chef/json_compat"
+require_relative "../json_compat"
 
 class Chef
   class ResourceCollection
     module ResourceCollectionSerialization
       # Serialize this object as a hash
-      def to_hash
-        instance_vars = Hash.new
+      def to_h
+        instance_vars = {}
         instance_variables.each do |iv|
           instance_vars[iv] = instance_variable_get(iv)
         end
@@ -32,6 +32,8 @@ class Chef
             "instance_vars" => instance_vars,
         }
       end
+
+      alias_method :to_hash, :to_h
 
       def to_json(*a)
         Chef::JSONCompat.to_json(to_hash, *a)
@@ -43,7 +45,7 @@ class Chef
 
       module ClassMethods
         def from_hash(o)
-          collection = new()
+          collection = new
           o["instance_vars"].each do |k, v|
             collection.instance_variable_set(k.to_sym, v)
           end
@@ -56,9 +58,10 @@ class Chef
       end
 
       def is_chef_resource!(arg)
-        unless arg.kind_of?(Chef::Resource)
+        unless arg.is_a?(Chef::Resource)
           raise ArgumentError, "Cannot insert a #{arg.class} into a resource collection: must be a subclass of Chef::Resource"
         end
+
         true
       end
     end

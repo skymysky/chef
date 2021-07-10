@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright (c) 2015 Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +17,8 @@
 
 require "spec_helper"
 
-require "chef/win32/api" if Chef::Platform.windows?
-require "chef/win32/api/error" if Chef::Platform.windows?
+require "chef/win32/api" if ChefUtils.windows?
+require "chef/win32/api/error" if ChefUtils.windows?
 require "chef/mixin/user_context"
 
 describe Chef::Mixin::UserContext, windows_only: true do
@@ -26,7 +26,7 @@ describe Chef::Mixin::UserContext, windows_only: true do
 
   let(:get_user_name_a) do
     FFI.ffi_lib "advapi32.dll"
-    FFI.attach_function :GetUserNameA, [ :pointer, :pointer ], :bool
+    FFI.attach_function :GetUserNameA, %i{pointer pointer}, :bool
   end
 
   let(:process_username) do
@@ -36,12 +36,14 @@ describe Chef::Mixin::UserContext, windows_only: true do
     if succeeded || last_error != Chef::ReservedNames::Win32::API::Error::ERROR_INSUFFICIENT_BUFFER
       raise Chef::Exceptions::Win32APIError, "Expected ERROR_INSUFFICIENT_BUFFER from GetUserNameA but it returned the following error: #{last_error}"
     end
+
     user_name = FFI::MemoryPointer.new :char, (name_size.read_long)
     succeeded = get_user_name_a.call(user_name, name_size)
     last_error = FFI::LastError.error
     if succeeded == 0 || last_error != 0
       raise Chef::Exceptions::Win32APIError, "GetUserNameA failed with #{lasterror}"
     end
+
     user_name.read_string
   end
 

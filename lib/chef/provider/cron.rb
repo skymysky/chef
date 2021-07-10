@@ -15,9 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
-require "chef/log"
-require "chef/provider"
+require_relative "../log"
+require_relative "../provider"
 
 class Chef
   class Provider
@@ -25,13 +24,12 @@ class Chef
 
       provides :cron, os: ["!aix", "!solaris2"]
 
-      SPECIAL_TIME_VALUES = [:reboot, :yearly, :annually, :monthly, :weekly, :daily, :midnight, :hourly]
-      CRON_ATTRIBUTES = [:minute, :hour, :day, :month, :weekday, :time, :command, :mailto, :path, :shell, :home, :environment]
-      WEEKDAY_SYMBOLS = [:sunday, :monday, :tuesday, :wednesday, :thursday, :friday, :saturday]
-
-      CRON_PATTERN = /\A([-0-9*,\/]+)\s([-0-9*,\/]+)\s([-0-9*,\/]+)\s([-0-9*,\/]+|[a-zA-Z]{3})\s([-0-9*,\/]+|[a-zA-Z]{3})\s(.*)/
-      SPECIAL_PATTERN = /\A(@(#{SPECIAL_TIME_VALUES.join('|')}))\s(.*)/
-      ENV_PATTERN = /\A(\S+)=(\S*)/
+      SPECIAL_TIME_VALUES = %i{reboot yearly annually monthly weekly daily midnight hourly}.freeze
+      CRON_ATTRIBUTES = %i{minute hour day month weekday time command mailto path shell home environment}.freeze
+      CRON_PATTERN = %r{\A([-0-9*,/]+)\s([-0-9*,/]+)\s([-0-9*,/]+)\s([-0-9*,/]+|[a-zA-Z]{3})\s([-0-9*,/]+|[a-zA-Z]{3})\s(.*)}.freeze
+      SPECIAL_PATTERN = /\A(@(#{SPECIAL_TIME_VALUES.join('|')}))\s(.*)/.freeze
+      ENV_PATTERN = /\A(\S+)=(\S*)/.freeze
+      ENVIRONMENT_PROPERTIES = %w{MAILTO PATH SHELL HOME}.freeze
 
       def initialize(new_resource, run_context)
         super(new_resource, run_context)
@@ -94,7 +92,7 @@ class Chef
         end
       end
 
-      def action_create
+      action :create do
         crontab = ""
         newcron = ""
         cron_found = false
@@ -103,7 +101,7 @@ class Chef
 
         if @cron_exists
           unless cron_different?
-            logger.trace("Skipping existing cron entry '#{new_resource.name}'")
+            logger.debug("#{new_resource}: Skipping existing cron entry")
             return
           end
           read_crontab.each_line do |line|
@@ -114,13 +112,7 @@ class Chef
             when ENV_PATTERN
               crontab << line unless cron_found
               next
-            when SPECIAL_PATTERN
-              if cron_found
-                cron_found = false
-                crontab << newcron
-                next
-              end
-            when CRON_PATTERN
+            when SPECIAL_PATTERN, CRON_PATTERN
               if cron_found
                 cron_found = false
                 crontab << newcron
@@ -154,7 +146,7 @@ class Chef
         end
       end
 
-      def action_delete
+      action :delete do
         if @cron_exists
           crontab = ""
           cron_found = false
@@ -165,12 +157,7 @@ class Chef
               next
             when ENV_PATTERN
               next if cron_found
-            when SPECIAL_PATTERN
-              if cron_found
-                cron_found = false
-                next
-              end
-            when CRON_PATTERN
+            when SPECIAL_PATTERN, CRON_PATTERN
               if cron_found
                 cron_found = false
                 next
@@ -192,7 +179,7 @@ class Chef
       private
 
       def set_environment_var(attr_name, attr_value)
-        if %w{MAILTO PATH SHELL HOME}.include?(attr_name)
+        if ENVIRONMENT_PROPERTIES.include?(attr_name)
           current_resource.send(attr_name.downcase.to_sym, attr_value.gsub(/^"|"$/, ""))
         else
           current_resource.environment(current_resource.environment.merge(attr_name => attr_value))
@@ -202,6 +189,7 @@ class Chef
       def read_crontab
         so = shell_out!("crontab -l -u #{new_resource.user}", returns: [0, 1])
         return nil if so.exitstatus == 1
+
         so.stdout
       rescue => e
         raise Chef::Exceptions::Cron, "Error determining state of #{new_resource.name}, error: #{e}"
@@ -214,30 +202,77 @@ class Chef
         raise Chef::Exceptions::Cron, "Error updating state of #{new_resource.name}, error: #{e}"
       end
 
-      def get_crontab_entry
-        newcron = ""
-        newcron << "# Chef Name: #{new_resource.name}\n"
-        [ :mailto, :path, :shell, :home ].each do |v|
-          newcron << "#{v.to_s.upcase}=\"#{new_resource.send(v)}\"\n" if new_resource.send(v)
+      #
+      # @return [String] The string of Env Variables containing line breaks.
+      #
+      def env_var_str
+        str = []
+        %i{mailto path shell home}.each do |v|
+          str << "#{v.to_s.upcase}=\"#{new_resource.send(v)}\"" if new_resource.send(v)
         end
         new_resource.environment.each do |name, value|
-          newcron << "#{name}=#{value}\n"
+          if ENVIRONMENT_PROPERTIES.include?(name)
+            unless new_resource.property_is_set?(name.downcase)
+              logger.warn("#{new_resource.name}: the environment property contains the '#{name}' variable, which should be set separately as a property.")
+              new_resource.send(name.downcase.to_sym, value.gsub(/^"|"$/, ""))
+              new_resource.environment.delete(name)
+              str << "#{name.to_s.upcase}=\"#{value}\""
+            else
+              raise Chef::Exceptions::Cron, "#{new_resource.name}: the '#{name}' property is set and environment property also contains the '#{name}' variable. Remove the variable from the environment property."
+            end
+          else
+            str << "#{name}=#{value}"
+          end
         end
-        if new_resource.time
-          newcron << "@#{new_resource.time} #{new_resource.command}\n"
-        else
-          newcron << "#{new_resource.minute} #{new_resource.hour} #{new_resource.day} #{new_resource.month} #{new_resource.weekday} #{new_resource.command}\n"
-        end
-        newcron
+        str.join("\n")
       end
 
-      def weekday_in_crontab
-        weekday_in_crontab = WEEKDAY_SYMBOLS.index(new_resource.weekday)
-        if weekday_in_crontab.nil?
-          new_resource.weekday
+      #
+      # @return [String] The Cron time string consisting five fields that Cron converts into a time interval.
+      #
+      def duration_str
+        if new_resource.time
+          "@#{new_resource.time}"
         else
-          weekday_in_crontab.to_s
+          "#{new_resource.minute} #{new_resource.hour} #{new_resource.day} #{new_resource.month} #{new_resource.weekday}"
         end
+      end
+
+      #
+      # @return [String] The timeout command string formed as per time_out property.
+      #
+      def time_out_str
+        return "" if new_resource.time_out.empty?
+
+        str = " timeout"
+        str << " --preserve-status" if new_resource.time_out["preserve-status"].to_s.casecmp("true") == 0
+        str << " --foreground" if new_resource.time_out["foreground"].to_s.casecmp("true") == 0
+        str << " --kill-after #{new_resource.time_out["kill-after"]}" if new_resource.time_out["kill-after"]
+        str << " --signal #{new_resource.time_out["signal"]}" if new_resource.time_out["signal"]
+        str << " #{new_resource.time_out["duration"]};"
+        str
+      end
+
+      #
+      # @return [String] The command to be executed. The new line at the end has been added purposefully.
+      #
+      def cmd_str
+        " #{new_resource.command}\n"
+      end
+
+      # Concatenates various information and formulates a complete string that
+      # could be written in the crontab
+      #
+      # @return [String] A crontab string formed as per the user inputs.
+      #
+      def get_crontab_entry
+        # Initialize
+        newcron = []
+        newcron << "# Chef Name: #{new_resource.name}"
+        newcron << env_var_str unless env_var_str.empty?
+        newcron << duration_str + time_out_str + cmd_str
+
+        newcron.join("\n")
       end
     end
   end

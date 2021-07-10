@@ -6,6 +6,7 @@ describe "Resource::ActionClass#converge_if_changed" do
   module Namer
     extend self
     attr_accessor :current_index
+
     def incrementing_value
       @incrementing_value += 1
       @incrementing_value
@@ -30,12 +31,13 @@ describe "Resource::ActionClass#converge_if_changed" do
         property :state2, default: "default_state2"
         property :sensitive1, default: "default_dontprintme", sensitive: true
         attr_accessor :converged
+
         def initialize(*args)
           super
           @converged = 0
         end
       end
-      result.resource_name resource_name
+      result.provides resource_name
       result
     end
     let(:converged_recipe) { converge(converge_recipe) }
@@ -53,9 +55,9 @@ describe "Resource::ActionClass#converge_if_changed" do
       context "and current_resource with state1=current, state2=current" do
         before :each do
           resource_class.load_current_value do
-            state1 "current_state1"
-            state2 "current_state2"
-            sensitive1 "current_dontprintme"
+            state1 "default_state1"
+            state2 "default_state2"
+            sensitive1 "default_dontprintme"
           end
         end
 
@@ -65,8 +67,8 @@ describe "Resource::ActionClass#converge_if_changed" do
           it "the resource updates nothing" do
             expect(resource.converged).to eq 0
             expect(resource.updated?).to  be_falsey
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create (up to date)
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create (up to date)
             EOM
           end
         end
@@ -83,11 +85,11 @@ describe "Resource::ActionClass#converge_if_changed" do
           it "the resource updates state1" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update default_identity1
-  -   set state1 to "new_state1" (was "current_state1")
-              EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update default_identity1
+                -   set state1 to "new_state1" (was "default_state1")
+            EOM
           end
         end
 
@@ -104,12 +106,12 @@ describe "Resource::ActionClass#converge_if_changed" do
           it "the resource updates state1 and state2" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update default_identity1
-  -   set state1 to "new_state1" (was "current_state1")
-  -   set state2 to "new_state2" (was "current_state2")
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update default_identity1
+                -   set state1 to "new_state1" (was "default_state1")
+                -   set state2 to "new_state2" (was "default_state2")
+            EOM
           end
         end
 
@@ -127,12 +129,12 @@ EOM
           it "the resource updates state1 and state2" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update default_identity1
-  -   set state1 to (suppressed sensitive property)
-  -   set state2 to (suppressed sensitive property)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update default_identity1
+                -   set state1 to (suppressed sensitive property)
+                -   set state2 to (suppressed sensitive property)
+            EOM
           end
         end
 
@@ -148,11 +150,11 @@ EOM
           it "the resource updates sensitive1" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update default_identity1
-  -   set sensitive1 to (suppressed sensitive property)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update default_identity1
+                -   set sensitive1 to (suppressed sensitive property)
+            EOM
           end
         end
 
@@ -160,7 +162,7 @@ EOM
           let(:converge_recipe) do
             <<-EOM
               #{resource_name} 'blah' do
-                state1 'current_state1'
+                state1 'default_state1'
                 state2 'new_state2'
               end
             EOM
@@ -169,11 +171,11 @@ EOM
           it "the resource updates state2" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update default_identity1
-  -   set state2 to "new_state2" (was "current_state2")
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update default_identity1
+                -   set state2 to "new_state2" (was "default_state2")
+            EOM
           end
         end
 
@@ -181,8 +183,8 @@ EOM
           let(:converge_recipe) do
             <<-EOM
               #{resource_name} 'blah' do
-                state1 'current_state1'
-                state2 'current_state2'
+                state1 'default_state1'
+                state2 'default_state2'
               end
             EOM
           end
@@ -190,9 +192,9 @@ EOM
           it "the resource updates nothing" do
             expect(resource.converged).to eq 0
             expect(resource.updated?).to  be_falsey
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create (up to date)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create (up to date)
+            EOM
           end
         end
 
@@ -211,9 +213,9 @@ EOM
           it "the resource updates nothing" do
             expect(resource.converged).to eq 0
             expect(resource.updated?).to  be_falsey
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create (up to date)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create (up to date)
+            EOM
           end
         end
       end
@@ -241,10 +243,10 @@ EOM
           it "the resource updates identity1" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update current_identity1
-  -   set identity1 to "new_identity1" (was "current_identity1")
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update current_identity1
+                -   set identity1 to "new_identity1" (was "current_identity1")
             EOM
           end
         end
@@ -263,14 +265,14 @@ EOM
           it "the resource is created" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - create default_identity1
-  -   set identity1  to "default_identity1" (default value)
-  -   set state1     to "default_state1" (default value)
-  -   set state2     to "default_state2" (default value)
-  -   set sensitive1 to (suppressed sensitive property) (default value)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - create default_identity1
+                -   set identity1  to "default_identity1" (default value)
+                -   set state1     to "default_state1" (default value)
+                -   set state2     to "default_state2" (default value)
+                -   set sensitive1 to (suppressed sensitive property) (default value)
+            EOM
           end
         end
 
@@ -288,14 +290,14 @@ EOM
           it "the resource is created" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - create default_identity1
-  -   set identity1  to "default_identity1" (default value)
-  -   set state1     to "new_state1"
-  -   set state2     to "new_state2"
-  -   set sensitive1 to (suppressed sensitive property)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - create default_identity1
+                -   set identity1  to "default_identity1" (default value)
+                -   set state1     to "new_state1"
+                -   set state2     to "new_state2"
+                -   set sensitive1 to (suppressed sensitive property)
+            EOM
           end
         end
 
@@ -313,14 +315,14 @@ EOM
           it "the resource is created" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - create default_identity1
-  -   set identity1  to (suppressed sensitive property) (default value)
-  -   set state1     to (suppressed sensitive property)
-  -   set state2     to (suppressed sensitive property)
-  -   set sensitive1 to (suppressed sensitive property) (default value)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - create default_identity1
+                -   set identity1  to (suppressed sensitive property) (default value)
+                -   set state1     to (suppressed sensitive property)
+                -   set state2     to (suppressed sensitive property)
+                -   set sensitive1 to (suppressed sensitive property) (default value)
+            EOM
           end
         end
       end
@@ -344,8 +346,8 @@ EOM
       context "and current_resource with state1=current, state2=current" do
         before :each do
           resource_class.load_current_value do
-            state1 "current_state1"
-            state2 "current_state2"
+            state1 "default_state1"
+            state2 "default_state2"
           end
         end
 
@@ -355,9 +357,9 @@ EOM
           it "the resource updates nothing" do
             expect(resource.converged).to eq 0
             expect(resource.updated?).to  be_falsey
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create (up to date)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create (up to date)
+            EOM
           end
         end
 
@@ -374,11 +376,11 @@ EOM
           it "the resource updates state1" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update default_identity1
-  -   set state1 to "new_state1" (was "current_state1")
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update default_identity1
+                -   set state1 to "new_state1" (was "default_state1")
+            EOM
           end
         end
 
@@ -395,13 +397,13 @@ EOM
           it "the resource updates state1 and state2" do
             expect(resource.converged).to eq 2
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update default_identity1
-  -   set state1 to "new_state1" (was "current_state1")
-  - update default_identity1
-  -   set state2 to "new_state2" (was "current_state2")
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update default_identity1
+                -   set state1 to "new_state1" (was "default_state1")
+                - update default_identity1
+                -   set state2 to "new_state2" (was "default_state2")
+            EOM
           end
         end
 
@@ -409,7 +411,7 @@ EOM
           let(:converge_recipe) do
             <<-EOM
               #{resource_name} 'blah' do
-                state1 'current_state1'
+                state1 'default_state1'
                 state2 'new_state2'
               end
             EOM
@@ -418,11 +420,11 @@ EOM
           it "the resource updates state2" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update default_identity1
-  -   set state2 to "new_state2" (was "current_state2")
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update default_identity1
+                -   set state2 to "new_state2" (was "default_state2")
+            EOM
           end
         end
 
@@ -430,8 +432,8 @@ EOM
           let(:converge_recipe) do
             <<-EOM
               #{resource_name} 'blah' do
-                state1 'current_state1'
-                state2 'current_state2'
+                state1 'default_state1'
+                state2 'default_state2'
               end
             EOM
           end
@@ -439,9 +441,9 @@ EOM
           it "the resource updates nothing" do
             expect(resource.converged).to eq 0
             expect(resource.updated?).to  be_falsey
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create (up to date)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create (up to date)
+            EOM
           end
         end
 
@@ -457,11 +459,11 @@ EOM
           it "the resource updates sensitive1" do
             expect(resource.converged).to eq 1
             expect(resource.updated?).to be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - update default_identity1
-  -   set sensitive1 to (suppressed sensitive property)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - update default_identity1
+                -   set sensitive1 to (suppressed sensitive property)
+            EOM
           end
         end
       end
@@ -481,15 +483,15 @@ EOM
           it "the resource is created" do
             expect(resource.converged).to eq 3
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - create default_identity1
-  -   set state1 to "default_state1" (default value)
-  - create default_identity1
-  -   set state2 to "default_state2" (default value)
-  - create default_identity1
-  -   set sensitive1 to (suppressed sensitive property) (default value)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - create default_identity1
+                -   set state1 to "default_state1" (default value)
+                - create default_identity1
+                -   set state2 to "default_state2" (default value)
+                - create default_identity1
+                -   set sensitive1 to (suppressed sensitive property) (default value)
+            EOM
           end
         end
 
@@ -507,15 +509,15 @@ EOM
           it "the resource is created" do
             expect(resource.converged).to eq 3
             expect(resource.updated?).to  be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - create default_identity1
-  -   set state1 to "new_state1"
-  - create default_identity1
-  -   set state2 to "new_state2"
-  - create default_identity1
-  -   set sensitive1 to (suppressed sensitive property)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - create default_identity1
+                -   set state1 to "new_state1"
+                - create default_identity1
+                -   set state2 to "new_state2"
+                - create default_identity1
+                -   set sensitive1 to (suppressed sensitive property)
+            EOM
           end
         end
 
@@ -533,15 +535,15 @@ EOM
           it "the resource is created" do
             expect(resource.converged).to eq 3
             expect(resource.updated?).to be_truthy
-            expect(converged_recipe.stdout).to eq <<-EOM
-* #{resource_name}[blah] action create
-  - create default_identity1
-  -   set state1 to (suppressed sensitive property)
-  - create default_identity1
-  -   set state2 to (suppressed sensitive property)
-  - create default_identity1
-  -   set sensitive1 to (suppressed sensitive property) (default value)
-EOM
+            expect(converged_recipe.stdout).to eq <<~EOM
+              * #{resource_name}[blah] action create
+                - create default_identity1
+                -   set state1 to (suppressed sensitive property)
+                - create default_identity1
+                -   set state2 to (suppressed sensitive property)
+                - create default_identity1
+                -   set sensitive1 to (suppressed sensitive property) (default value)
+            EOM
           end
         end
 

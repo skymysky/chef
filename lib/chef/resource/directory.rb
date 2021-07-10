@@ -2,7 +2,7 @@
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Seth Chisamore (<schisamo@chef.io>)
 # Author:: Tyler Cloke (<tyler@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,15 +18,17 @@
 # limitations under the License.
 #
 
-require "chef/resource"
-require "chef/mixin/securable"
+require_relative "../resource"
+require_relative "../mixin/securable"
 
 class Chef
   class Resource
     class Directory < Chef::Resource
-      resource_name :directory
+      unified_mode true
 
-      description "Use the directory resource to manage a directory, which is a hierarchy"\
+      provides :directory
+
+      description "Use the **directory** resource to manage a directory, which is a hierarchy"\
                   " of folders that comprises all of the information stored on a computer."\
                   " The root directory is the top-level, under which the rest of the directory"\
                   " is organized. The directory resource uses the name property to specify the"\
@@ -40,8 +42,12 @@ class Chef
       default_action :create
       allowed_actions :create, :delete
 
-      property :path, String, name_property: true, identity: true
-      property :recursive, [ TrueClass, FalseClass ], default: false
+      property :path, String, name_property: true,
+               description: "The path to the directory. Using a fully qualified path is recommended, but is not always required."
+
+      property :recursive, [ TrueClass, FalseClass ],
+        description: "Create or delete parent directories recursively. For the owner, group, and mode properties, the value of this property applies only to the leaf directory.",
+        default: false
     end
   end
 end

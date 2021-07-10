@@ -1,6 +1,6 @@
 #
 # Author:: Ezra Zygmuntowicz (<ezra@engineyard.com>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,9 +16,9 @@
 # limitations under the License.
 #
 
-require "chef/provider/package"
-require "chef/resource/portage_package"
-require "chef/util/path_helper"
+require_relative "../package"
+require_relative "../../resource/portage_package"
+require_relative "../../util/path_helper"
 
 class Chef
   class Provider
@@ -28,17 +28,17 @@ class Chef
         provides :package, platform: "gentoo"
         provides :portage_package
 
-        PACKAGE_NAME_PATTERN = %r{(?:([^/]+)/)?([^/]+)}
+        PACKAGE_NAME_PATTERN = %r{^(?:([^/]+)/)?([^/]+)$}.freeze
 
         def load_current_resource
-          @current_resource = Chef::Resource::Package.new(new_resource.name)
+          @current_resource = Chef::Resource::PortagePackage.new(new_resource.name)
           current_resource.package_name(new_resource.package_name)
 
-          category, pkg = /^#{PACKAGE_NAME_PATTERN}$/.match(new_resource.package_name)[1, 2]
+          category, pkg = PACKAGE_NAME_PATTERN.match(new_resource.package_name)[1, 2]
 
           globsafe_category = category ? Chef::Util::PathHelper.escape_glob_dir(category) : nil
           globsafe_pkg = Chef::Util::PathHelper.escape_glob_dir(pkg)
-          possibilities = Dir["/var/db/pkg/#{globsafe_category || '*'}/#{globsafe_pkg}-*"].map { |d| d.sub(%r{/var/db/pkg/}, "") }
+          possibilities = Dir["/var/db/pkg/#{globsafe_category || "*"}/#{globsafe_pkg}-*"].map { |d| d.sub(%r{/var/db/pkg/}, "") }
           versions = possibilities.map do |entry|
             if entry =~ %r{[^/]+/#{Regexp.escape(pkg)}\-(\d[\.\d]*[a-z]?((_(alpha|beta|pre|rc|p)\d*)*)?(-r\d+)?)}
               [$&, $1]
@@ -49,7 +49,7 @@ class Chef
             atoms = versions.map(&:first).sort
             categories = atoms.map { |v| v.split("/")[0] }.uniq
             if !category && categories.size > 1
-              raise Chef::Exceptions::Package, "Multiple packages found for #{new_resource.package_name}: #{atoms.join(' ')}. Specify a category."
+              raise Chef::Exceptions::Package, "Multiple packages found for #{new_resource.package_name}: #{atoms.join(" ")}. Specify a category."
             end
           elsif versions.size == 1
             current_resource.version(versions.first.last)
@@ -66,11 +66,12 @@ class Chef
         def candidate_version
           return @candidate_version if @candidate_version
 
-          pkginfo = shell_out_compact("portageq", "best_visible", "/", new_resource.package_name)
+          pkginfo = shell_out("portageq", "best_visible", "/", new_resource.package_name)
 
           if pkginfo.exitstatus != 0
             pkginfo.stderr.each_line do |line|
-              if line =~ /[Uu]nqualified atom .*match.* multiple/
+              # cspell:disable-next-line
+              if /[Uu]nqualified atom .*match.* multiple/.match?(line)
                 raise_error_for_query("matched multiple packages (please specify a category):\n#{pkginfo.inspect}")
               end
             end
@@ -87,7 +88,7 @@ class Chef
           end
 
           pkginfo.stdout.chomp!
-          if pkginfo.stdout =~ /-r\d+$/
+          if /-r\d+$/.match?(pkginfo.stdout)
             # Latest/Best version of the package is a revision (-rX).
             @candidate_version = pkginfo.stdout.split(/(?<=-)/).last(2).join
           else
@@ -106,7 +107,7 @@ class Chef
             pkg = "~#{name}-#{$1}"
           end
 
-          shell_out_compact!( "emerge", "-g", "--color", "n", "--nospinner", "--quiet", options, pkg )
+          shell_out!( "emerge", "-g", "--color", "n", "--nospinner", "--quiet", options, pkg )
         end
 
         def upgrade_package(name, version)
@@ -120,7 +121,7 @@ class Chef
                   new_resource.package_name.to_s
                 end
 
-          shell_out_compact!( "emerge", "--unmerge", "--color", "n", "--nospinner", "--quiet", options, pkg )
+          shell_out!( "emerge", "--unmerge", "--color", "n", "--nospinner", "--quiet", options, pkg )
         end
 
         def purge_package(name, version)

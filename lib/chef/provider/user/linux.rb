@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2016-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "chef/provider/user"
+require_relative "../user"
 
 class Chef
   class Provider
@@ -24,23 +24,28 @@ class Chef
         provides :user, os: "linux"
 
         def create_user
-          shell_out_compact!("useradd", universal_options, useradd_options, new_resource.username)
+          shell_out!("useradd", universal_options, useradd_options, new_resource.username)
         end
 
         def manage_user
-          shell_out_compact!("usermod", universal_options, usermod_options, new_resource.username)
+          manage_u = shell_out("usermod", universal_options, usermod_options, new_resource.username, returns: [0, 12])
+          if manage_u.exitstatus == 12 && manage_u.stderr !~ /exists/
+            raise Chef::Exceptions::User, "Unable to modify home directory for #{new_resource.username}"
+          end
+
+          manage_u.error!
         end
 
         def remove_user
-          shell_out_compact!("userdel", userdel_options, new_resource.username)
+          shell_out!("userdel", userdel_options, new_resource.username)
         end
 
         def lock_user
-          shell_out_compact!("usermod", "-L", new_resource.username)
+          shell_out!("usermod", "-L", new_resource.username)
         end
 
         def unlock_user
-          shell_out_compact!("usermod", "-U", new_resource.username)
+          shell_out!("usermod", "-U", new_resource.username)
         end
 
         # common to usermod and useradd
@@ -88,11 +93,12 @@ class Chef
         def check_lock
           # there's an old bug in rhel (https://bugzilla.redhat.com/show_bug.cgi?id=578534)
           # which means that both 0 and 1 can be success.
-          passwd_s = shell_out_compact("passwd", "-S", new_resource.username, returns: [ 0, 1 ])
+          passwd_s = shell_out("passwd", "-S", new_resource.username, returns: [ 0, 1 ])
 
           # checking "does not exist" has to come before exit code handling since centos and ubuntu differ in exit codes
-          if passwd_s.stderr =~ /does not exist/
+          if /does not exist/.match?(passwd_s.stderr)
             return false if whyrun_mode?
+
             raise Chef::Exceptions::User, "User #{new_resource.username} does not exist when checking lock status for #{new_resource}"
           end
 
@@ -102,8 +108,8 @@ class Chef
           # now the actual output parsing
           @locked = nil
           status_line = passwd_s.stdout.split(" ")
-          @locked = false if status_line[1] =~ /^[PN]/
-          @locked = true if status_line[1] =~ /^L/
+          @locked = false if /^[PN]/.match?(status_line[1])
+          @locked = true if /^L/.match?(status_line[1])
 
           raise Chef::Exceptions::User, "Cannot determine if user #{new_resource.username} is locked for #{new_resource}" if @locked.nil?
 

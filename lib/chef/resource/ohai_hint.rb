@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2011-2018, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,49 +15,82 @@
 # limitations under the License.
 #
 
+require_relative "../resource"
+
 class Chef
   class Resource
     class OhaiHint < Chef::Resource
-      resource_name :ohai_hint
+      unified_mode true
+
       provides(:ohai_hint) { true }
 
-      description "Use the ohai_hint resource to pass hint data to Ohai to aid in configuration detection."
+      description "Use the **ohai_hint** resource to aid in configuration detection by passing hint data to Ohai."
       introduced "14.0"
+      examples <<~DOC
+      **Create a hint file**
+
+      ```ruby
+      ohai_hint 'example' do
+        content a: 'test_content'
+      end
+      ```
+
+      **Create a hint file with a name that does not match the resource name**
+
+      ```ruby
+      ohai_hint 'example' do
+        hint_name 'custom'
+      end
+      ```
+
+      **Create a hint file that is not loaded at compile time**
+
+      ```ruby
+      ohai_hint 'example' do
+        compile_time false
+      end
+      ```
+
+      **Delete a hint file**
+
+      ```ruby
+      ohai_hint 'example' do
+        action :delete
+      end
+      ```
+      DOC
 
       property :hint_name, String,
-               description: "The name of hints file if different from the resource name.",
-               name_property: true
+        description: "An optional property to set the hint name if it differs from the resource block's name.",
+        name_property: true
 
       property :content, Hash,
-               description: "Values to include in the hint file."
+        description: "Values to include in the hint file."
 
+      # override compile_time property to default to true
       property :compile_time, [TrueClass, FalseClass],
-               description: "Should the resource execute during the compile time phase",
-               default: true, desired_state: false
+        description: "Determines whether or not the resource is executed during the compile time phase.",
+        default: true, desired_state: false
 
-      action :create do
-        description "Create an Ohai hint file"
-
-        declare_resource(:directory, ::Ohai::Config.ohai.hints_path.first) do
+      action :create, description: "Create an Ohai hint file." do
+        directory ::Ohai::Config.ohai.hints_path.first do
           action :create
           recursive true
         end
 
-        declare_resource(:file, ohai_hint_file_path(new_resource.hint_name)) do
+        file ohai_hint_file_path(new_resource.hint_name) do
           action :create
           content format_content(new_resource.content)
         end
       end
 
-      action :delete do
-        description "Delete an Ohai hint file"
-
-        declare_resource(:file, ohai_hint_file_path(new_resource.hint_name)) do
+      action :delete, description: "Delete an Ohai hint file." do
+        file ohai_hint_file_path(new_resource.hint_name) do
           action :delete
           notifies :reload, ohai[reload ohai post hint removal]
         end
 
-        declare_resource(:ohai, "reload ohai post hint removal") do
+        ohai "reload ohai post hint removal" do
           action :nothing
         end
       end
@@ -77,15 +110,8 @@ class Chef
         # @return [JSON] json representation of the content of an empty string if content was nil
         def format_content(content)
           return "" if content.nil? || content.empty?
-          JSON.pretty_generate(content)
-        end
-      end
 
-      # this resource forces itself to run at compile_time
-      def after_created
-        return unless compile_time
-        Array(action).each do |action|
-          run_action(action)
+          JSON.pretty_generate(content)
         end
       end
     end

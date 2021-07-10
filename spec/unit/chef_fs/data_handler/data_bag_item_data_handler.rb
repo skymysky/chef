@@ -1,6 +1,6 @@
 #
 # Author:: Sandra Tiffin (<sandi.tiffin@gmail.com>)
-# Copyright:: Copyright 2014-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 #
 
 require "spec_helper"
-require "lib/chef/chef_fs/data_handler/data_bag_item_data_handler.rb"
+require "lib/chef/chef_fs/data_handler/data_bag_item_data_handler"
 
 class TestDataBag < Mash
   attr_accessor :name
@@ -68,7 +68,7 @@ describe Chef::ChefFS::DataHandler::DataBagItemDataHandler do
 
     context "using a reserved word as part of the data bag name" do
       %w{xnode rolex xenvironmentx xclientx}.each do |bag_name|
-        let(:entry) { TestDataBagItem.new("#{bag_name}", "bag") }
+        let(:entry) { TestDataBagItem.new(bag_name.to_s, "bag") }
         let(:object) do
           { "raw_data" => { "id" => "bag" } }
         end

@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: AJ Christensen (<aj@chef.io>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,8 +22,8 @@ require "chef/node/attribute"
 
 describe Chef::Node::Attribute do
   let(:events) { instance_double(Chef::EventDispatch::Dispatcher) }
-  let(:run_context) { instance_double(Chef::RunContext, :events => events) }
-  let(:node) { instance_double(Chef::Node, :run_context => run_context) }
+  let(:run_context) { instance_double(Chef::RunContext, events: events) }
+  let(:node) { instance_double(Chef::Node, run_context: run_context) }
   before(:each) do
     allow(events).to receive(:attribute_changed)
     @attribute_hash =
@@ -63,16 +63,16 @@ describe Chef::Node::Attribute do
                                                      "mtu" => "1280",
                                                      "type" => "gif",
                                                      "encapsulation" => "IPIP" },
-                                         "vmnet8" =>         { "flags" => %w{UP BROADCAST SMART RUNNING SIMPLEX MULTICAST},
-                                                               "number" => "8",
-                                                               "addresses" => { "192.168.4.1" => { "broadcast" => "192.168.4.255",
-                                                                                                   "netmask" => "255.255.255.0",
-                                                                                                   "family" => "inet" },
-                                                                                "00:50:56:c0:00:08" => { "family" => "lladdr" } },
-                                                               "mtu" => "1500",
-                                                               "type" => "vmnet",
-                                                               "arp" => { "192.168.4.255" => "ff:ff:ff:ff:ff:ff" },
-                                                               "encapsulation" => "Ethernet" },
+                                         "vmnet8" => { "flags" => %w{UP BROADCAST SMART RUNNING SIMPLEX MULTICAST},
+                                                       "number" => "8",
+                                                       "addresses" => { "192.168.4.1" => { "broadcast" => "192.168.4.255",
+                                                                                           "netmask" => "255.255.255.0",
+                                                                                           "family" => "inet" },
+                                                                        "00:50:56:c0:00:08" => { "family" => "lladdr" } },
+                                                       "mtu" => "1500",
+                                                       "type" => "vmnet",
+                                                       "arp" => { "192.168.4.255" => "ff:ff:ff:ff:ff:ff" },
+                                                       "encapsulation" => "Ethernet" },
                                          "en0" => { "status" => "inactive",
                                                     "flags" => %w{UP BROADCAST SMART RUNNING SIMPLEX MULTICAST},
                                                     "number" => "0",
@@ -80,9 +80,9 @@ describe Chef::Node::Attribute do
                                                     "mtu" => "1500",
                                                     "media" => { "supported" => { "autoselect" => { "options" => [] },
                                                                                   "none" => { "options" => [] },
-                                                                                  "1000baseT" => { "options" => ["full-duplex", "flow-control", "hw-loopback"] },
-                                                                                  "10baseT/UTP" =>               { "options" => ["half-duplex", "full-duplex", "flow-control", "hw-loopback"] },
-                                                                                  "100baseTX" =>                 { "options" => ["half-duplex", "full-duplex", "flow-control", "hw-loopback"] } },
+                                                                                  "1000baseT" => { "options" => %w{full-duplex flow-control hw-loopback} },
+                                                                                  "10baseT/UTP" => { "options" => %w{half-duplex full-duplex flow-control hw-loopback} },
+                                                                                  "100baseTX" => { "options" => %w{half-duplex full-duplex flow-control hw-loopback} } },
                                                                  "selected" => { "autoselect" => { "options" => [] } } },
                                                     "type" => "en",
                                                     "encapsulation" => "Ethernet" },
@@ -118,28 +118,28 @@ describe Chef::Node::Attribute do
                                                                  "selected" => { "autoselect" => { "options" => [] } } },
                                                     "type" => "en",
                                                     "encapsulation" => "Ethernet" },
-                                         "fw0" =>                       { "status" => "inactive",
-                                                                          "flags" => %w{BROADCAST SIMPLEX MULTICAST},
-                                                                          "number" => "0",
-                                                                          "addresses" => { "00:23:32:ff:fe:b0:32:f2" => { "family" => "lladdr" } },
-                                                                          "mtu" => "4078",
-                                                                          "media" => { "supported" => { "autoselect" => { "options" => ["full-duplex"] } },
-                                                                                       "selected" => { "autoselect" => { "options" => ["full-duplex"] } } },
-                                                                          "type" => "fw",
-                                                                          "encapsulation" => "1394" },
-                                         "en3" =>                       { "status" => "active",
-                                                                          "flags" => %w{UP BROADCAST SMART RUNNING SIMPLEX MULTICAST},
-                                                                          "number" => "3",
-                                                                          "addresses" => { "169.254.206.152" => { "broadcast" => "169.254.255.255",
-                                                                                                                  "netmask" => "255.255.0.0",
-                                                                                                                  "family" => "inet" },
-                                                                                           "00:1c:42:00:00:00" => { "family" => "lladdr" },
-                                                                                           "fe80::21c:42ff:fe00:0" => { "scope" => "Link", "prefixlen" => "64", "family" => "inet6" } },
-                                                                          "mtu" => "1500",
-                                                                          "media" => { "supported" => { "autoselect" => { "options" => [] } },
-                                                                                       "selected" => { "autoselect" => { "options" => [] } } },
-                                                                          "type" => "en",
-                                                                          "encapsulation" => "Ethernet" } } },
+                                         "fw0" => { "status" => "inactive",
+                                                    "flags" => %w{BROADCAST SIMPLEX MULTICAST},
+                                                    "number" => "0",
+                                                    "addresses" => { "00:23:32:ff:fe:b0:32:f2" => { "family" => "lladdr" } },
+                                                    "mtu" => "4078",
+                                                    "media" => { "supported" => { "autoselect" => { "options" => ["full-duplex"] } },
+                                                                 "selected" => { "autoselect" => { "options" => ["full-duplex"] } } },
+                                                    "type" => "fw",
+                                                    "encapsulation" => "1394" },
+                                         "en3" => { "status" => "active",
+                                                    "flags" => %w{UP BROADCAST SMART RUNNING SIMPLEX MULTICAST},
+                                                    "number" => "3",
+                                                    "addresses" => { "169.254.206.152" => { "broadcast" => "169.254.255.255",
+                                                                                            "netmask" => "255.255.0.0",
+                                                                                            "family" => "inet" },
+                                                                     "00:1c:42:00:00:00" => { "family" => "lladdr" },
+                                                                     "fe80::21c:42ff:fe00:0" => { "scope" => "Link", "prefixlen" => "64", "family" => "inet6" } },
+                                                    "mtu" => "1500",
+                                                    "media" => { "supported" => { "autoselect" => { "options" => [] } },
+                                                                 "selected" => { "autoselect" => { "options" => [] } } },
+                                                    "type" => "en",
+                                                    "encapsulation" => "Ethernet" } } },
         "fqdn" => "latte.local",
         "ohai_time" => 1249065590.90391,
         "domain" => "local",
@@ -178,13 +178,13 @@ describe Chef::Node::Attribute do
       expect(@attributes).to be_a_kind_of(Chef::Node::Attribute)
     end
 
-    it "should take an Automatioc, Normal, Default and Override hash" do
+    it "should take an Automatic, Normal, Default and Override hash" do
       expect { Chef::Node::Attribute.new({}, {}, {}, {}) }.not_to raise_error
     end
 
-    [ :normal, :default, :override, :automatic ].each do |accessor|
+    %i{normal default override automatic}.each do |accessor|
       it "should set #{accessor}" do
-        na = Chef::Node::Attribute.new({ :normal => true }, { :default => true }, { :override => true }, { :automatic => true })
+        na = Chef::Node::Attribute.new({ normal: true }, { default: true }, { override: true }, { automatic: true })
         expect(na.send(accessor)).to eq({ accessor.to_s => true })
       end
     end
@@ -382,7 +382,7 @@ describe Chef::Node::Attribute do
       expect(@attributes["command"]["ps"]).to eq("ps -ef")
     end
 
-    it "should return default data if it is not overriden or in attribute data" do
+    it "should return default data if it is not overridden or in attribute data" do
       expect(@attributes["music"]["mastodon"]).to eq("rocks")
     end
 
@@ -522,20 +522,20 @@ describe Chef::Node::Attribute do
 
   describe "has_key?" do
     it "should return true if an attribute exists" do
-      expect(@attributes.has_key?("music")).to eq(true)
+      expect(@attributes.key?("music")).to eq(true)
     end
 
     it "should return false if an attribute does not exist" do
-      expect(@attributes.has_key?("ninja")).to eq(false)
+      expect(@attributes.key?("ninja")).to eq(false)
     end
 
     it "should return false if an attribute does not exist using dot notation" do
-      expect(@attributes.has_key?("does_not_exist_at_all")).to eq(false)
+      expect(@attributes.key?("does_not_exist_at_all")).to eq(false)
     end
 
     it "should return true if an attribute exists but is set to false" do
-      @attributes.has_key?("music")
-      expect(@attributes["music"].has_key?("apophis")).to eq(true)
+      @attributes.key?("music")
+      expect(@attributes["music"].key?("apophis")).to eq(true)
     end
 
     it "does not find keys above the current nesting level" do
@@ -546,7 +546,7 @@ describe Chef::Node::Attribute do
       expect(@attributes["music"]["this"]).not_to have_key("must")
     end
 
-    [:include?, :key?, :member?].each do |method|
+    %i{include? key? member?}.each do |method|
       it "should alias the method #{method} to itself" do
         expect(@attributes).to respond_to(method)
       end
@@ -572,8 +572,8 @@ describe Chef::Node::Attribute do
     before(:each) do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  { "two" => "three" },
-          "hut" =>  { "two" => "three" },
+          "one" => { "two" => "three" },
+          "hut" => { "two" => "three" },
           "place" => {},
         },
         {
@@ -589,7 +589,7 @@ describe Chef::Node::Attribute do
     end
 
     it "should yield each top level key" do
-      collect = Array.new
+      collect = []
       @attributes.each_key do |k|
         collect << k
       end
@@ -602,7 +602,7 @@ describe Chef::Node::Attribute do
     end
 
     it "should yield lower if we go deeper" do
-      collect = Array.new
+      collect = []
       @attributes["one"].each_key do |k|
         collect << k
       end
@@ -621,11 +621,11 @@ describe Chef::Node::Attribute do
     before(:each) do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -637,7 +637,7 @@ describe Chef::Node::Attribute do
     end
 
     it "should yield each top level key and value, post merge rules" do
-      collect = Hash.new
+      collect = {}
       @attributes.each do |k, v|
         collect[k] = v
       end
@@ -659,11 +659,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -679,7 +679,7 @@ describe Chef::Node::Attribute do
     end
 
     it "should yield each top level key, post merge rules" do
-      collect = Array.new
+      collect = []
       @attributes.each_key do |k|
         collect << k
       end
@@ -695,11 +695,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -715,7 +715,7 @@ describe Chef::Node::Attribute do
     end
 
     it "should yield each top level key and value pair, post merge rules" do
-      collect = Hash.new
+      collect = {}
       @attributes.each_pair do |k, v|
         collect[k] = v
       end
@@ -731,11 +731,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -751,7 +751,7 @@ describe Chef::Node::Attribute do
     end
 
     it "should yield each value, post merge rules" do
-      collect = Array.new
+      collect = []
       @attributes.each_value do |v|
         collect << v
       end
@@ -762,7 +762,7 @@ describe Chef::Node::Attribute do
     end
 
     it "should yield four elements" do
-      collect = Array.new
+      collect = []
       @attributes.each_value do |v|
         collect << v
       end
@@ -775,11 +775,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -809,11 +809,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -866,11 +866,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -886,11 +886,11 @@ describe Chef::Node::Attribute do
     end
 
     it "should return true if any key has the value supplied" do
-      expect(@attributes.has_value?("cookies")).to eq(true)
+      expect(@attributes.value?("cookies")).to eq(true)
     end
 
     it "should return false no key has the value supplied" do
-      expect(@attributes.has_value?("lololol")).to eq(false)
+      expect(@attributes.value?("lololol")).to eq(false)
     end
 
     it "should alias value?" do
@@ -898,7 +898,7 @@ describe Chef::Node::Attribute do
     end
   end
 
-  describe "index" do
+  describe "index", ruby: "< 3.0.0" do
     # Hash#index is deprecated and triggers warnings.
     def silence
       old_verbose = $VERBOSE
@@ -911,11 +911,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -952,11 +952,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -988,11 +988,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -1007,14 +1007,8 @@ describe Chef::Node::Attribute do
       expect(@attributes).to respond_to(:select)
     end
 
-    if RUBY_VERSION >= "1.8.7"
-      it "should not raise a LocalJumpError if no block is given" do
-        expect { @attributes.select }.not_to raise_error
-      end
-    else
-      it "should raise a LocalJumpError if no block is given" do
-        expect { @attributes.select }.to raise_error(LocalJumpError)
-      end
+    it "should not raise a LocalJumpError if no block is given" do
+      expect { @attributes.select }.not_to raise_error
     end
 
     it "should return an empty hash/array (ruby-version-dependent) for a block containing nil" do
@@ -1038,11 +1032,11 @@ describe Chef::Node::Attribute do
     before do
       @attributes = Chef::Node::Attribute.new(
         {
-          "one" =>  "two",
-          "hut" =>  "three",
+          "one" => "two",
+          "hut" => "three",
         },
         {
-          "one" =>  "four",
+          "one" => "four",
           "snakes" => "on a plane",
         },
         {
@@ -1265,12 +1259,64 @@ describe Chef::Node::Attribute do
   describe "frozen immutable strings" do
     it "strings in hashes should be frozen" do
       @attributes.default["foo"]["bar"]["baz"] = "fizz"
-      expect { @attributes["foo"]["bar"]["baz"] << "buzz" }.to raise_error(RuntimeError, "can't modify frozen String")
+      expect { @attributes["foo"]["bar"]["baz"] << "buzz" }.to raise_error(FrozenError, /can't modify frozen String/)
     end
 
     it "strings in arrays should be frozen" do
       @attributes.default["foo"]["bar"] = [ "fizz" ]
-      expect { @attributes["foo"]["bar"][0] << "buzz" }.to raise_error(RuntimeError, "can't modify frozen String")
+      expect { @attributes["foo"]["bar"][0] << "buzz" }.to raise_error(FrozenError, /can't modify frozen String/)
+    end
+  end
+
+  describe "deep merging with nils" do
+    it "nils when deep merging between default levels knocks out values" do
+      @attributes.default["foo"] = "bar"
+      expect(@attributes["foo"]).to eql("bar")
+      @attributes.force_default["foo"] = nil
+      expect(@attributes["foo"]).to be nil
+    end
+
+    it "nils when deep merging between override levels knocks out values" do
+      @attributes.override["foo"] = "bar"
+      expect(@attributes["foo"]).to eql("bar")
+      @attributes.force_override["foo"] = nil
+      expect(@attributes["foo"]).to be nil
+    end
+
+    it "nils when deep merging between default+override levels knocks out values" do
+      @attributes.default["foo"] = "bar"
+      expect(@attributes["foo"]).to eql("bar")
+      @attributes.override["foo"] = nil
+      expect(@attributes["foo"]).to be nil
+    end
+
+    it "nils when deep merging between normal+automatic levels knocks out values" do
+      @attributes.normal["foo"] = "bar"
+      expect(@attributes["foo"]).to eql("bar")
+      @attributes.automatic["foo"] = nil
+      expect(@attributes["foo"]).to be nil
+    end
+  end
+
+  describe "to_json" do
+    it "should convert to a valid json string" do
+      json = @attributes["hot"].to_json
+      expect { JSON.parse(json) }.not_to raise_error
+    end
+
+    it "should convert to a json based on current state" do
+      expect(@attributes["hot"].to_json).to eq("{\"day\":\"sunday\"}")
+    end
+  end
+
+  describe "to_yaml" do
+    it "should convert to a valid yaml format" do
+      json = @attributes["hot"].to_yaml
+      expect { YAML.parse(json) }.not_to raise_error
+    end
+
+    it "should convert to a yaml based on current state" do
+      expect(@attributes["hot"].to_yaml).to eq("---\nday: sunday\n")
     end
   end
 end

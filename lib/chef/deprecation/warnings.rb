@@ -1,6 +1,6 @@
 #
 # Author:: Serdar Sutay (<serdar@chef.io>)
-# Copyright:: Copyright 2013-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,12 +20,13 @@ class Chef
   module Deprecation
     module Warnings
 
-      require "chef/version"
+      require_relative "../version"
+      require "chef-utils/dist" unless defined?(ChefUtils::Dist)
 
       def add_deprecation_warnings_for(method_names)
         method_names.each do |name|
           define_method(name) do |*args|
-            message = "Method '#{name}' of '#{self.class}' is deprecated. It will be removed in Chef #{Chef::VERSION.to_i.next}."
+            message = "Method '#{name}' of '#{self.class}' is deprecated. It will be removed in #{ChefUtils::Dist::Infra::PRODUCT} #{Chef::VERSION.to_i.next}."
             message << " Please update your cookbooks accordingly."
             Chef.deprecated(:internal_api, message)
             super(*args)

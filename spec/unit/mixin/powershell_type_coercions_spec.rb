@@ -1,6 +1,6 @@
 #
 # Author:: Jay Mundrawala (<jdm@chef.io>)
-# Copyright:: Copyright 2015-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@ class Chef::PSTypeTester
 end
 
 describe Chef::Mixin::PowershellTypeCoercions do
-  let (:test_class) { Chef::PSTypeTester.new }
+  let(:test_class) { Chef::PSTypeTester.new }
 
   describe "#translate_type" do
     it "single quotes a string" do
@@ -34,7 +34,7 @@ describe Chef::Mixin::PowershellTypeCoercions do
 
     ["'", '"', "#", "`"].each do |c|
       it "base64 encodes a string that contains #{c}" do
-        expect(test_class.translate_type("#{c}")).to match(Base64.strict_encode64(c))
+        expect(test_class.translate_type(c.to_s)).to match(Base64.strict_encode64(c))
       end
     end
 

@@ -1,6 +1,6 @@
 #
 # Author:: Nimisha Sharad (<nimisha.sharad@msystechnologies.com>)
-# Copyright:: Copyright (c) 2016 Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,17 +17,18 @@
 #
 
 require "spec_helper"
-require "chef/provider/windows_task"
+require "chef-utils/dist"
 
 describe Chef::Resource::WindowsTask, :windows_only do
   # resource.task.application_name will default to task_name unless resource.command is set
   let(:task_name) { "chef-client-functional-test" }
-  let(:new_resource) { Chef::Resource::WindowsTask.new(task_name) }
+  let(:new_resource) { Chef::Resource::WindowsTask.new(task_name, run_context) }
   let(:windows_task_provider) do
-    node = Chef::Node.new
-    events = Chef::EventDispatch::Dispatcher.new
-    run_context = Chef::RunContext.new(node, {}, events)
-    Chef::Provider::WindowsTask.new(new_resource, run_context)
+    new_resource.provider_for_action(:create)
+  end
+
+  let(:run_context) do
+    Chef::RunContext.new(Chef::Node.new, {}, Chef::EventDispatch::Dispatcher.new)
   end
 
   describe "action :create" do
@@ -35,7 +36,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
     context "when command is with arguments" do
       subject do
         new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         # Make sure MM/DD/YYYY is accepted
 
         new_resource.start_day "09/20/2017"
@@ -43,76 +44,168 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource
       end
 
-      it "creates scheduled task and sets command arguments" do
-        subject.command "chef-client -W"
+      context "With Arguments" do
+        it "creates scheduled task and sets command arguments" do
+          subject.command "#{ChefUtils::Dist::Infra::CLIENT} -W"
+          call_for_create_action
+          # loading current resource again to check new task is creted and it matches task parameters
+          current_resource = call_for_load_current_resource
+          expect(current_resource.exists).to eq(true)
+          expect(current_resource.task.application_name).to eq(ChefUtils::Dist::Infra::CLIENT)
+          expect(current_resource.task.parameters).to eq("-W")
+        end
+
+        it "does not converge the resource if it is already converged" do
+          subject.command "#{ChefUtils::Dist::Infra::CLIENT} -W"
+          subject.run_action(:create)
+          subject.command "#{ChefUtils::Dist::Infra::CLIENT} -W"
+          subject.run_action(:create)
+          expect(subject).not_to be_updated_by_last_action
+        end
+
+        it "creates scheduled task and sets command arguments when arguments inclusive single quotes" do
+          subject.command "#{ChefUtils::Dist::Infra::CLIENT} -W -L 'C:\\chef\\chef-ad-join.log'"
+          call_for_create_action
+          # loading current resource again to check new task is creted and it matches task parameters
+          current_resource = call_for_load_current_resource
+          expect(current_resource.exists).to eq(true)
+          expect(current_resource.task.application_name).to eq(ChefUtils::Dist::Infra::CLIENT)
+          expect(current_resource.task.parameters).to eq("-W -L 'C:\\chef\\chef-ad-join.log'")
+        end
+
+        it "does not converge the resource if it is already converged" do
+          subject.command "#{ChefUtils::Dist::Infra::CLIENT} -W -L 'C:\\chef\\chef-ad-join.log'"
+          subject.run_action(:create)
+          subject.command "#{ChefUtils::Dist::Infra::CLIENT} -W -L 'C:\\chef\\chef-ad-join.log'"
+          subject.run_action(:create)
+          expect(subject).not_to be_updated_by_last_action
+        end
+
+        it "creates scheduled task and sets command arguments with spaces in command" do
+          subject.command '"C:\\Program Files\\example\\program.exe" -arg1 --arg2'
+          call_for_create_action
+          current_resource = call_for_load_current_resource
+          expect(current_resource.exists).to eq(true)
+          expect(current_resource.task.application_name).to eq('"C:\\Program Files\\example\\program.exe"')
+          expect(current_resource.task.parameters).to eq("-arg1 --arg2")
+        end
+
+        it "does not converge the resource if it is already converged" do
+          subject.command '"C:\\Program Files\\example\\program.exe" -arg1 --arg2'
+          subject.run_action(:create)
+          subject.command '"C:\\Program Files\\example\\program.exe" -arg1 --arg2'
+          subject.run_action(:create)
+          expect(subject).not_to be_updated_by_last_action
+        end
+
+        it "creates scheduled task and sets command arguments with spaces in arguments" do
+          subject.command 'powershell.exe -file "C:\\Program Files\\app\\script.ps1"'
+          call_for_create_action
+          current_resource = call_for_load_current_resource
+          expect(current_resource.exists).to eq(true)
+          expect(current_resource.task.application_name).to eq("powershell.exe")
+          expect(current_resource.task.parameters).to eq('-file "C:\\Program Files\\app\\script.ps1"')
+        end
+
+        it "does not converge the resource if it is already converged" do
+          subject.command 'powershell.exe -file "C:\\Program Files\\app\\script.ps1"'
+          subject.run_action(:create)
+          subject.command 'powershell.exe -file "C:\\Program Files\\app\\script.ps1"'
+          subject.run_action(:create)
+          expect(subject).not_to be_updated_by_last_action
+        end
+
+        it "creates scheduled task and sets command arguments" do
+          subject.command "ping http://www.google.com"
+          call_for_create_action
+          # loading current resource again to check new task is creted and it matches task parameters
+          current_resource = call_for_load_current_resource
+          expect(current_resource.exists).to eq(true)
+          expect(current_resource.task.application_name).to eq("ping")
+          expect(current_resource.task.parameters).to eq("http://www.google.com")
+        end
+
+        it "does not converge the resource if it is already converged" do
+          subject.command "ping http://www.google.com"
+          subject.run_action(:create)
+          subject.command "ping http://www.google.com"
+          subject.run_action(:create)
+          expect(subject).not_to be_updated_by_last_action
+        end
+      end
+
+      context "Without Arguments" do
+        it "creates scheduled task and sets command arguments" do
+          subject.command ChefUtils::Dist::Infra::CLIENT
+          call_for_create_action
+          # loading current resource again to check new task is creted and it matches task parameters
+          current_resource = call_for_load_current_resource
+          expect(current_resource.exists).to eq(true)
+          expect(current_resource.task.application_name).to eq(ChefUtils::Dist::Infra::CLIENT)
+          expect(current_resource.task.parameters).to be_empty
+        end
+
+        it "does not converge the resource if it is already converged" do
+          subject.command ChefUtils::Dist::Infra::CLIENT
+          subject.run_action(:create)
+          subject.command ChefUtils::Dist::Infra::CLIENT
+          subject.run_action(:create)
+          expect(subject).not_to be_updated_by_last_action
+        end
+      end
+
+      it "creates scheduled task and Re-sets command arguments" do
+        subject.command 'powershell.exe -file "C:\\Program Files\\app\\script.ps1"'
+        subject.run_action(:create)
+        current_resource = call_for_load_current_resource
+        expect(current_resource.task.application_name).to eq("powershell.exe")
+        expect(current_resource.task.parameters).to eq('-file "C:\\Program Files\\app\\script.ps1"')
+
+        subject.command "powershell.exe"
+        subject.run_action(:create)
+        current_resource = call_for_load_current_resource
+        expect(current_resource.task.application_name).to eq("powershell.exe")
+        expect(current_resource.task.parameters).to be_empty
+        expect(subject).to be_updated_by_last_action
+      end
+    end
+
+    context "when description is passed" do
+      subject do
+        new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
+        new_resource.command task_name
+        # Make sure MM/DD/YYYY is accepted
+        new_resource.start_day "09/20/2017"
+        new_resource.frequency :hourly
+        new_resource
+      end
+
+      let(:some_description) { "this is test description" }
+
+      it "create the task and sets its description" do
+        subject.description some_description
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
-        expect(current_resource.task.application_name).to eq("chef-client")
-        expect(current_resource.task.parameters).to eq("-W")
+        expect(current_resource.task.description).to eq(some_description)
       end
 
       it "does not converge the resource if it is already converged" do
-        subject.command "chef-client -W"
+        subject.description some_description
         subject.run_action(:create)
-        subject.command "chef-client -W"
+        subject.description some_description
         subject.run_action(:create)
         expect(subject).not_to be_updated_by_last_action
       end
 
-      it "creates scheduled task and sets command arguments" do
-        subject.command "chef-client -W -L 'C:\\chef\\chef-ad-join.log'"
-        call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
-        current_resource = call_for_load_current_resource
-        expect(current_resource.exists).to eq(true)
-        expect(current_resource.task.application_name).to eq("chef-client")
-        expect(current_resource.task.parameters).to eq("-W -L C:\\\\chef\\\\chef-ad-join.log")
-      end
-
-      it "does not converge the resource if it is already converged" do
-        subject.command "chef-client -W -L 'C:\\chef\\chef-ad-join.log'"
+      it "updates task with new description if task already exist" do
+        subject.description some_description
         subject.run_action(:create)
-        subject.command "chef-client -W -L 'C:\\chef\\chef-ad-join.log'"
+        subject.description "test description"
         subject.run_action(:create)
-        expect(subject).not_to be_updated_by_last_action
-      end
-
-      it "creates scheduled task and sets command arguments" do
-        subject.command '"C:\\Program Files\\example\program.exe" -arg1 --arg2'
-        call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
-        current_resource = call_for_load_current_resource
-        expect(current_resource.exists).to eq(true)
-        expect(current_resource.task.application_name).to eq("C:\\Program Files\\example\\program.exe")
-        expect(current_resource.task.parameters).to eq("-arg1 --arg2")
-      end
-
-      it "does not converge the resource if it is already converged" do
-        subject.command '"C:\\Program Files\\example\program.exe" -arg1 --arg2'
-        subject.run_action(:create)
-        subject.command '"C:\\Program Files\\example\program.exe" -arg1 --arg2'
-        subject.run_action(:create)
-        expect(subject).not_to be_updated_by_last_action
-      end
-
-      it "creates scheduled task and sets command arguments" do
-        subject.command "ping http://www.google.com"
-        call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
-        current_resource = call_for_load_current_resource
-        expect(current_resource.exists).to eq(true)
-        expect(current_resource.task.application_name).to eq("ping")
-        expect(current_resource.task.parameters).to eq("http://www.google.com")
-      end
-
-      it "does not converge the resource if it is already converged" do
-        subject.command "ping http://www.google.com"
-        subject.run_action(:create)
-        subject.command "ping http://www.google.com"
-        subject.run_action(:create)
-        expect(subject).not_to be_updated_by_last_action
+        expect(subject).to be_updated_by_last_action
       end
     end
 
@@ -120,7 +213,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
       subject do
         new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
         new_resource.command task_name
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         # Make sure MM/DD/YYYY is accepted
         new_resource.start_day "09/20/2017"
         new_resource.frequency :hourly
@@ -129,7 +222,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
 
       it "creates a scheduled task to run every 1 hr starting on 09/20/2017" do
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
         expect(current_resource.task.application_name).to eq(task_name)
@@ -155,13 +248,13 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.run_level :highest
         new_resource.frequency :minute
         new_resource.frequency_modifier 15
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
       it "creates a scheduled task that runs after every 15 minutes" do
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
         trigger_details = current_resource.task.trigger(0)
@@ -203,13 +296,13 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.run_level :highest
         new_resource.frequency :hourly
         new_resource.frequency_modifier 3
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
       it "creates a scheduled task that runs after every 3 hrs" do
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
         trigger_details = current_resource.task.trigger(0)
@@ -224,12 +317,12 @@ describe Chef::Resource::WindowsTask, :windows_only do
         expect(subject).not_to be_updated_by_last_action
       end
 
-      it "updates a scheduled task to run every 5 hrs when frequency modifer updated to 5" do
+      it "updates a scheduled task to run every 5 hrs when frequency modifier updated to 5" do
         subject.run_action(:create)
         current_resource = call_for_load_current_resource
         trigger_details = current_resource.task.trigger(0)
         expect(trigger_details[:minutes_interval]).to eq(180)
-        # updating frequency modifer to 5 from 3
+        # updating frequency modifier to 5 from 3
         subject.frequency_modifier 5
         subject.run_action(:create)
         expect(subject).to be_updated_by_last_action
@@ -248,13 +341,13 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.command task_name
         new_resource.run_level :highest
         new_resource.frequency :daily
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
       it "creates a scheduled task to run daily" do
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
         trigger_details = current_resource.task.trigger(0)
@@ -277,7 +370,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.command task_name
         new_resource.run_level :highest
         new_resource.frequency :monthly
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -289,7 +382,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
 
         it "if day property is not set creates a scheduled task to run monthly on first day of the month" do
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -309,7 +402,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "creates a scheduled task to run monthly on first, second and third day of the month" do
           subject.day "1, 2, 3"
           call_for_create_action
-          #loading current resource again to check new task is created and it matches task parameters
+          # loading current resource again to check new task is created and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -330,15 +423,15 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "creates a scheduled task to run monthly on 1, 2, 3, 4, 8, 20, 21, 15, 28, 31 day of the month" do
           subject.day "1, 2, 3, 4, 8, 20, 21, 15, 28, 31"
           call_for_create_action
-          #loading current resource again to check new task is created and it matches task parameters
+          # loading current resource again to check new task is created and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
           expect(current_resource.task.application_name).to eq(task_name)
           expect(trigger_details[:trigger_type]).to eq(4)
           expect(current_resource.task.principals[:run_level]).to eq(1)
-          expect(trigger_details[:type][:days]).to eq(1209548943) #TODO:: windows_task_provider.send(:days_of_month)
-          expect(trigger_details[:type][:months]).to eq(4095) #windows_task_provider.send(:months_of_year)
+          expect(trigger_details[:type][:days]).to eq(1209548943) # TODO:: windows_task_provider.send(:days_of_month)
+          expect(trigger_details[:type][:months]).to eq(4095) # windows_task_provider.send(:months_of_year)
         end
 
         it "does not converge the resource if it is already converged" do
@@ -352,15 +445,15 @@ describe Chef::Resource::WindowsTask, :windows_only do
           subject.day "1, 2, 3, 4, 8, 20, 21, 30"
           subject.months "Jan, Feb, May, Sep, Dec"
           call_for_create_action
-          #loading current resource again to check new task is created and it matches task parameters
+          # loading current resource again to check new task is created and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
           expect(current_resource.task.application_name).to eq(task_name)
           expect(trigger_details[:trigger_type]).to eq(4)
           expect(current_resource.task.principals[:run_level]).to eq(1)
-          expect(trigger_details[:type][:days]).to eq(538443919) #TODO:windows_task_provider.send(:days_of_month)
-          expect(trigger_details[:type][:months]).to eq(2323) #windows_task_provider.send(:months_of_year)
+          expect(trigger_details[:type][:days]).to eq(538443919) # TODO:windows_task_provider.send(:days_of_month)
+          expect(trigger_details[:type][:months]).to eq(2323) # windows_task_provider.send(:months_of_year)
         end
 
         it "does not converge the resource if it is already converged" do
@@ -375,7 +468,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
           subject.frequency_modifier "First"
           subject.day "Mon, Fri, Sun"
           call_for_create_action
-          #loading current resource again to check new task is created and it matches task parameters
+          # loading current resource again to check new task is created and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -384,7 +477,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
           expect(current_resource.task.principals[:run_level]).to eq(1)
           expect(trigger_details[:type][:days_of_week]).to eq(35)
           expect(trigger_details[:type][:weeks_of_month]).to eq(1)
-          expect(trigger_details[:type][:months]).to eq(4095) #windows_task_provider.send(:months_of_year)
+          expect(trigger_details[:type][:months]).to eq(4095) # windows_task_provider.send(:months_of_year)
         end
 
         it "does not converge the resource if it is already converged" do
@@ -402,13 +495,13 @@ describe Chef::Resource::WindowsTask, :windows_only do
           new_resource.command task_name
           new_resource.run_level :highest
           new_resource.frequency :monthly
-          new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+          new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
           new_resource
         end
 
         it "raises argument error if frequency_modifier is 'first, second' and day is not provided." do
           subject.frequency_modifier "first, second"
-          expect { subject.after_created }.to raise_error("Please select day on which you want to run the task e.g. 'Mon, Tue'. Multiple values must be seprated by comma.")
+          expect { subject.after_created }.to raise_error("Please select day on which you want to run the task e.g. 'Mon, Tue'. Multiple values must be separated by comma.")
         end
 
         it "raises argument error if months is passed along with frequency_modifier" do
@@ -420,13 +513,13 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "not raises any Argument error if frequency_modifier set as 'first, second, third' and day is provided" do
           subject.frequency_modifier "first, second, third"
           subject.day "Mon, Fri"
-          expect { subject.after_created }.not_to raise_error(ArgumentError)
+          expect { subject.after_created }.not_to raise_error
         end
 
         it "not raises any Argument error if frequency_modifier 2 " do
           subject.frequency_modifier 2
           subject.day "Mon, Sun"
-          expect { subject.after_created }.not_to raise_error(ArgumentError)
+          expect { subject.after_created }.not_to raise_error
         end
 
         it "raises argument error if frequency_modifier > 12" do
@@ -439,10 +532,10 @@ describe Chef::Resource::WindowsTask, :windows_only do
           expect { subject.after_created }.to raise_error("frequency_modifier value 0 is invalid. Valid values for :monthly frequency are 1 - 12, 'FIRST', 'SECOND', 'THIRD', 'FOURTH', 'LAST'.")
         end
 
-        it "creates scheduled task to run task monthly on Monday and Friday of first, second and thrid week of month" do
+        it "creates scheduled task to run task monthly on Monday and Friday of first, second and third week of month" do
           subject.frequency_modifier "first, second, third"
           subject.day "Mon, Fri"
-          expect { subject.after_created }.not_to raise_error(ArgumentError)
+          expect { subject.after_created }.not_to raise_error
           call_for_create_action
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
@@ -465,7 +558,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "creates scheduled task to run task monthly on every 6 months when frequency_modifier is 6 and to run on 1st and 2nd day of month" do
           subject.frequency_modifier 6
           subject.day "1, 2"
-          expect { subject.after_created }.not_to raise_error(ArgumentError)
+          expect { subject.after_created }.not_to raise_error
           call_for_create_action
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
@@ -491,13 +584,13 @@ describe Chef::Resource::WindowsTask, :windows_only do
           new_resource.command task_name
           new_resource.run_level :highest
           new_resource.frequency :monthly
-          new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+          new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
           new_resource
         end
 
         it "creates scheduled task to run monthly to run last day of the month" do
           subject.day "last"
-          expect { subject.after_created }.not_to raise_error(ArgumentError)
+          expect { subject.after_created }.not_to raise_error
           call_for_create_action
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
@@ -518,7 +611,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
 
         it "day property set as 'lastday' creates scheduled task to run monthly to run last day of the month" do
           subject.day "lastday"
-          expect { subject.after_created }.not_to raise_error(ArgumentError)
+          expect { subject.after_created }.not_to raise_error
           call_for_create_action
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
@@ -542,7 +635,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "creates scheduled task to run monthly on last week of the month" do
           subject.frequency_modifier "last"
           subject.day "Mon, Fri"
-          expect { subject.after_created }.not_to raise_error(ArgumentError)
+          expect { subject.after_created }.not_to raise_error
           call_for_create_action
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
@@ -566,7 +659,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
       context "when wild card (*) set as months" do
         it "creates the scheduled task to run on 1st day of the all months" do
           subject.months "*"
-          expect { subject.after_created }.not_to raise_error(ArgumentError)
+          expect { subject.after_created }.not_to raise_error
           call_for_create_action
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
@@ -598,7 +691,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
           new_resource.command task_name
           new_resource.run_level :highest
           new_resource.frequency :monthly
-          new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+          new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
           new_resource
         end
 
@@ -606,7 +699,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
           subject.day "2"
           subject.start_day "03/07/2018"
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -628,7 +721,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "creates a scheduled task to run monthly on first, second and third day of the month" do
           subject.day "1,2,3"
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -649,7 +742,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "creates a scheduled task to run monthly on each wednesday of the month" do
           subject.frequency_modifier "1"
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -657,7 +750,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
           expect(trigger_details[:trigger_type]).to eq(4)
           expect(current_resource.task.principals[:run_level]).to eq(1)
           expect(trigger_details[:type][:days]).to eq(1)
-          expect(trigger_details[:type][:months]).to eq(4095) #windows_task_provider.send(:months_of_year)
+          expect(trigger_details[:type][:months]).to eq(4095) # windows_task_provider.send(:months_of_year)
         end
 
         it "does not converge the resource if it is already converged" do
@@ -671,16 +764,16 @@ describe Chef::Resource::WindowsTask, :windows_only do
           subject.frequency_modifier "2"
           subject.months = nil
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
-          #loading current resource
+          # loading current resource
           expect(current_resource.task.application_name).to eq(task_name)
           expect(trigger_details[:trigger_type]).to eq(4)
           expect(current_resource.task.principals[:run_level]).to eq(1)
           expect(trigger_details[:type][:days]).to eq(1)
-          expect(trigger_details[:type][:months]).to eq(2730) #windows_task_provider.send(:months_of_year)
+          expect(trigger_details[:type][:months]).to eq(2730) # windows_task_provider.send(:months_of_year)
         end
 
         it "does not converge the resource if it is already converged" do
@@ -700,7 +793,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.command task_name
         new_resource.run_level :highest
         new_resource.frequency :once
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -714,7 +807,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "creates the scheduled task to run once at 5pm" do
           subject.start_time "17:00"
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -739,13 +832,13 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.command task_name
         new_resource.run_level :highest
         new_resource.frequency :weekly
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
       it "creates the scheduled task to run weekly" do
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
         trigger_details = current_resource.task.trigger(0)
@@ -765,7 +858,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "creates hte scheduled task for all days of week" do
           subject.day "*"
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -789,7 +882,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
           subject.day "Mon, Fri"
           subject.frequency_modifier 2
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -888,13 +981,13 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.command task_name
         new_resource.run_level :highest
         new_resource.frequency :onstart
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
       it "creates the scheduled task to run at system start up" do
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
         trigger_details = current_resource.task.trigger(0)
@@ -914,7 +1007,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
           subject.start_day "09/10/2018"
           subject.start_time "15:00"
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -935,13 +1028,13 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.command task_name
         new_resource.run_level :highest
         new_resource.frequency :on_logon
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
       it "creates the scheduled task to on logon" do
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
         trigger_details = current_resource.task.trigger(0)
@@ -961,7 +1054,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
           subject.start_day "09/10/2018"
           subject.start_time "15:00"
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -982,7 +1075,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.command task_name
         new_resource.run_level :highest
         new_resource.frequency :on_idle
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -996,7 +1089,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         it "creates the scheduled task to run when system is idle" do
           subject.idle_time 20
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -1021,7 +1114,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
           subject.start_day "09/10/2018"
           subject.start_time "15:00"
           call_for_create_action
-          #loading current resource again to check new task is creted and it matches task parameters
+          # loading current resource again to check new task is creted and it matches task parameters
           current_resource = call_for_load_current_resource
           expect(current_resource.exists).to eq(true)
           trigger_details = current_resource.task.trigger(0)
@@ -1041,7 +1134,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
         new_resource.command task_name
         new_resource.run_level :highest
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -1049,7 +1142,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         subject.frequency :minute
         subject.random_delay "20"
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
         trigger_details = current_resource.task.trigger(0)
@@ -1080,19 +1173,103 @@ describe Chef::Resource::WindowsTask, :windows_only do
       end
     end
 
+    context "when battery options are passed" do
+      subject do
+        new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
+        new_resource.command task_name
+        new_resource.run_level :highest
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
+        new_resource
+      end
+
+      it "sets the default if options are not provided" do
+        subject.frequency :minute
+        call_for_create_action
+        # loading current resource again to check new task is created and it matches task parameters
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.stop_if_going_on_batteries).to eql(false)
+        expect(current_resource.disallow_start_if_on_batteries).to eql(false)
+      end
+
+      it "sets disallow_start_if_on_batteries to true" do
+        subject.frequency :minute
+        subject.disallow_start_if_on_batteries true
+        call_for_create_action
+        # loading current resource again to check new task is created and it matches task parameters
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.settings[:disallow_start_if_on_batteries]).to eql(true)
+      end
+
+      it "sets disallow_start_if_on_batteries to false" do
+        subject.frequency :minute
+        subject.disallow_start_if_on_batteries false
+        call_for_create_action
+        # loading current resource again to check new task is created and it matches task parameters
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.settings[:disallow_start_if_on_batteries]).to eql(false)
+      end
+
+      it "sets stop_if_going_on_batteries to true" do
+        subject.frequency :minute
+        subject.stop_if_going_on_batteries true
+        call_for_create_action
+        # loading current resource again to check new task is creted and it matches task parameters
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.settings[:stop_if_going_on_batteries]).to eql(true)
+      end
+
+      it "sets stop_if_going_on_batteries to false" do
+        subject.frequency :minute
+        subject.stop_if_going_on_batteries false
+        call_for_create_action
+        # loading current resource again to check new task is created and it matches task parameters
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.settings[:stop_if_going_on_batteries]).to eql(false)
+      end
+
+      it "sets the default if options are nil" do
+        subject.frequency :minute
+        subject.stop_if_going_on_batteries nil
+        subject.disallow_start_if_on_batteries nil
+        call_for_create_action
+        # loading current resource again to check new task is created and it matches task parameters
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.settings[:stop_if_going_on_batteries]).to eql(false)
+        expect(current_resource.task.settings[:disallow_start_if_on_batteries]).to eql(false)
+      end
+
+      it "does not converge the resource if it is already converged" do
+        subject.frequency :minute
+        subject.stop_if_going_on_batteries true
+        subject.disallow_start_if_on_batteries false
+        subject.run_action(:create)
+        subject.frequency :minute
+        subject.stop_if_going_on_batteries true
+        subject.disallow_start_if_on_batteries false
+        subject.run_action(:create)
+        expect(subject).not_to be_updated_by_last_action
+      end
+    end
+
     context "frequency :none" do
       subject do
         new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
         new_resource.command task_name
         new_resource.run_level :highest
         new_resource.frequency :none
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
       it "creates the scheduled task to run on demand only" do
         call_for_create_action
-        #loading current resource again to check new task is creted and it matches task parameters
+        # loading current resource again to check new task is creted and it matches task parameters
         current_resource = call_for_load_current_resource
         expect(current_resource.exists).to eq(true)
 
@@ -1107,6 +1284,213 @@ describe Chef::Resource::WindowsTask, :windows_only do
         expect(subject).not_to be_updated_by_last_action
       end
     end
+
+    context "when start_when_available is passed" do
+      subject do
+        new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
+        new_resource.command task_name
+        new_resource.run_level :highest
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
+        new_resource
+      end
+
+      it "sets start_when_available to true" do
+        subject.frequency :minute
+        subject.start_when_available true
+        call_for_create_action
+        # loading current resource again to check new task is creted and it matches task parameters
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.settings[:start_when_available]).to eql(true)
+      end
+
+      it "sets start_when_available to false" do
+        subject.frequency :minute
+        subject.start_when_available false
+        call_for_create_action
+        # loading current resource again to check new task is created and it matches task parameters
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.settings[:start_when_available]).to eql(false)
+      end
+
+      it "sets the default if start_when_available is nil" do
+        subject.frequency :minute
+        subject.start_when_available nil
+        call_for_create_action
+        # loading current resource again to check new task is created and it matches task parameters
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.settings[:start_when_available]).to eql(false)
+      end
+
+      it "does not converge the resource if it is already converged" do
+        subject.frequency :minute
+        subject.start_when_available true
+        subject.run_action(:create)
+        subject.frequency :minute
+        subject.start_when_available true
+        subject.disallow_start_if_on_batteries false
+        subject.run_action(:create)
+        expect(subject).not_to be_updated_by_last_action
+      end
+    end
+  end
+
+  context "task_name with parent folder" do
+    describe "task_name with path '\\foo\\chef-client-functional-test' " do
+      let(:task_name) { "\\foo\\chef-client-functional-test" }
+      after { delete_task }
+      subject do
+        new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
+        new_resource.command task_name
+        new_resource.run_level :highest
+        new_resource.frequency :once
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
+        new_resource
+      end
+
+      it "creates the scheduled task with task name 'chef-client-functional-test' inside path '\\foo'" do
+        call_for_create_action
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.application_name).to eq(task_name)
+      end
+
+      it "does not converge the resource if it is already converged" do
+        subject.run_action(:create)
+        subject.run_action(:create)
+        expect(subject).not_to be_updated_by_last_action
+      end
+    end
+
+    describe "task_name with path '\\foo\\bar\\chef-client-functional-test' " do
+      let(:task_name) { "\\foo\\bar\\chef-client-functional-test" }
+      after { delete_task }
+      subject do
+        new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
+        new_resource.command task_name
+        new_resource.run_level :highest
+        new_resource.frequency :once
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
+        new_resource
+      end
+
+      it "creates the scheduled task with task with name 'chef-client-functional-test' inside path '\\foo\\bar' " do
+        call_for_create_action
+        current_resource = call_for_load_current_resource
+        expect(current_resource.exists).to eq(true)
+        expect(current_resource.task.application_name).to eq(task_name)
+      end
+
+      it "does not converge the resource if it is already converged" do
+        subject.run_action(:create)
+        subject.run_action(:create)
+        expect(subject).not_to be_updated_by_last_action
+      end
+    end
+  end
+
+  describe "priority" do
+    after { delete_task }
+    subject do
+      new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
+      new_resource.command task_name
+      new_resource.frequency :once
+      new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
+      new_resource
+    end
+
+    it "default sets to 7" do
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("below_normal_7")
+    end
+
+    it "0 sets priority level to critical" do
+      subject.priority = 0
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("critical")
+    end
+
+    it "2 sets priority level to highest" do
+      subject.priority = 1
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("highest")
+    end
+
+    it "2 sets priority level to above_normal" do
+      subject.priority = 2
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("above_normal_2")
+    end
+
+    it "3 sets priority level to above_normal" do
+      subject.priority = 3
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("above_normal_3")
+    end
+
+    it "4 sets priority level to normal" do
+      subject.priority = 4
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("normal_4")
+    end
+
+    it "5 sets priority level to normal" do
+      subject.priority = 5
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("normal_5")
+    end
+
+    it "6 sets priority level to normal" do
+      subject.priority = 6
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("normal_6")
+    end
+
+    it "7 sets priority level to below_normal" do
+      subject.priority = 7
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("below_normal_7")
+    end
+
+    it "8 sets priority level to below_normal" do
+      subject.priority = 8
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("below_normal_8")
+    end
+
+    it "9 sets priority level to lowest" do
+      subject.priority = 9
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("lowest")
+    end
+
+    it "10 sets priority level to idle" do
+      subject.priority = 10
+      call_for_create_action
+      current_resource = call_for_load_current_resource
+      expect(current_resource.task.priority).to eq("idle")
+    end
+
+    it "is idempotent" do
+      subject.priority 8
+      subject.run_action(:create)
+      subject.run_action(:create)
+      expect(subject).not_to be_updated_by_last_action
+    end
+
   end
 
   describe "Examples of idempotent checks for each frequency" do
@@ -1118,7 +1502,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.run_level :highest
         new_resource.frequency :once
         new_resource.start_time "17:00"
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -1142,7 +1526,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
         new_resource.command task_name
         new_resource.run_level :highest
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource.frequency :none
         new_resource
       end
@@ -1168,7 +1552,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.command task_name
         new_resource.run_level :highest
         new_resource.frequency :weekly
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -1195,7 +1579,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.run_level :highest
         new_resource.frequency :once
         new_resource.start_time "17:00"
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -1222,7 +1606,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.frequency :hourly
         new_resource.frequency_modifier 5
         new_resource.random_delay "2400"
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -1241,7 +1625,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.frequency :daily
         new_resource.frequency_modifier 2
         new_resource.random_delay "2400"
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -1257,7 +1641,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
         new_resource.command task_name
         new_resource.frequency :on_logon
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -1282,7 +1666,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
         new_resource.run_level :highest
         new_resource.frequency :onstart
         new_resource.frequency_modifier 20
-        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+        new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
         new_resource
       end
 
@@ -1299,31 +1683,75 @@ describe Chef::Resource::WindowsTask, :windows_only do
       new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
       new_resource.command task_name
       new_resource.run_level :highest
-      new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+      new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
       new_resource
     end
 
     context "when start_day is passed with frequency :onstart" do
-      it "not raises error" do
+      it "does not raises error" do
         subject.frequency :onstart
         subject.start_day "09/20/2017"
         expect { subject.after_created }.not_to raise_error
       end
     end
 
-    context "when a non-system user is passed without password" do
+    context "when a non system user is passed without password" do
       it "raises error" do
-        subject.user "Administrator"
+        subject.user "USER"
         subject.frequency :onstart
-        expect { subject.after_created }.to raise_error(%q{Cannot specify a user other than the system users without specifying a password!. Valid passwordless users: 'NT AUTHORITY\SYSTEM', 'SYSTEM', 'NT AUTHORITY\LOCALSERVICE', 'NT AUTHORITY\NETWORKSERVICE', 'BUILTIN\USERS', 'USERS'})
+        expect { subject.after_created }.to raise_error(%q{Please provide a password or check if this task needs to be interactive! Valid passwordless users are: 'SYSTEM', 'NT AUTHORITY\SYSTEM', 'LOCAL SERVICE', 'NT AUTHORITY\LOCAL SERVICE', 'NETWORK SERVICE', 'NT AUTHORITY\NETWORK SERVICE', 'ADMINISTRATORS', 'BUILTIN\ADMINISTRATORS', 'USERS', 'BUILTIN\USERS', 'GUESTS', 'BUILTIN\GUESTS'})
+      end
+      it "does not raises error when task is interactive" do
+        subject.user "USER"
+        subject.frequency :onstart
+        subject.interactive_enabled true
+        expect { subject.after_created }.not_to raise_error
       end
     end
 
-    context "when interactive_enabled is passed for a System user without password" do
-      it "raises error" do
-        subject.interactive_enabled true
+    context "when a system user is passed without password" do
+      it "does not raises error" do
+        subject.user "ADMINISTRATORS"
         subject.frequency :onstart
-        expect { subject.after_created }.to raise_error("Please provide the password when attempting to set interactive/non-interactive.")
+        expect { subject.after_created }.not_to raise_error
+      end
+      it "does not raises error when task is interactive" do
+        subject.user "ADMINISTRATORS"
+        subject.frequency :onstart
+        subject.interactive_enabled true
+        expect { subject.after_created }.not_to raise_error
+      end
+    end
+
+    context "when a non system user is passed with password" do
+      it "does not raises error" do
+        subject.user "USER"
+        subject.password "XXXX"
+        subject.frequency :onstart
+        expect { subject.after_created }.not_to raise_error
+      end
+      it "does not raises error when task is interactive" do
+        subject.user "USER"
+        subject.password "XXXX"
+        subject.frequency :onstart
+        subject.interactive_enabled true
+        expect { subject.after_created }.not_to raise_error
+      end
+    end
+
+    context "when a system user is passed with password" do
+      it "raises error" do
+        subject.user "ADMINISTRATORS"
+        subject.password "XXXX"
+        subject.frequency :onstart
+        expect { subject.after_created }.to raise_error("Password is not required for system users.")
+      end
+      it "raises error when task is interactive" do
+        subject.user "ADMINISTRATORS"
+        subject.password "XXXX"
+        subject.frequency :onstart
+        subject.interactive_enabled true
+        expect { subject.after_created }.to raise_error("Password is not required for system users.")
       end
     end
 
@@ -1404,7 +1832,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
     subject do
       new_resource = Chef::Resource::WindowsTask.new(task_name, run_context)
       new_resource.command task_name
-      new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accespts this
+      new_resource.execution_time_limit = 259200 / 60 # converting "PT72H" into minutes and passing here since win32-taskscheduler accepts this
       new_resource.frequency :hourly
       new_resource
     end
@@ -1460,7 +1888,7 @@ describe Chef::Resource::WindowsTask, :windows_only do
       subject.run_action(:run)
       subject.run_action(:end)
       current_resource = call_for_load_current_resource
-      expect(current_resource.task.status).to eq("queued").or eq("ready") #queued or can be ready
+      expect(current_resource.task.status).to eq("queued").or eq("ready") # queued or can be ready
     end
   end
 

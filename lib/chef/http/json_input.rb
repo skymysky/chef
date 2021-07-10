@@ -1,7 +1,7 @@
 #--
 # Author:: Daniel DeLeo (<dan@chef.io>)
 # Author:: John Keiser (<jkeiser@chef.io>)
-# Copyright:: Copyright 2013-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-require "chef/json_compat"
+require_relative "../json_compat"
 
 class Chef
   class HTTP
@@ -36,7 +36,7 @@ class Chef
           headers.delete_if { |key, _value| key.casecmp("content-type") == 0 }
           headers["Content-Type"] = "application/json"
           json_opts = {}
-          json_opts[:validate_utf8] = opts[:validate_utf8] if opts.has_key?(:validate_utf8)
+          json_opts[:validate_utf8] = opts[:validate_utf8] if opts.key?(:validate_utf8)
           data = Chef::JSONCompat.to_json(data, json_opts)
           # Force encoding to binary to fix SSL related EOFErrors
           # cf. http://tickets.opscode.com/browse/CHEF-2363

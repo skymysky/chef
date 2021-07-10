@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,12 +20,12 @@ require "spec_helper"
 
 class NoWhyrunDemonstrator < Chef::Provider
   attr_reader :system_state_altered
+
   def whyrun_supported?
     false
   end
 
-  def load_current_resource
-  end
+  def load_current_resource; end
 
   def action_foo
     @system_state_altered = true
@@ -39,8 +39,7 @@ class ConvergeActionDemonstrator < Chef::Provider
     true
   end
 
-  def load_current_resource
-  end
+  def load_current_resource; end
 
   def action_foo
     converge_by("running a state changing action") do
@@ -73,10 +72,6 @@ describe Chef::Provider do
 
   it "should mixin shell_out!" do
     expect(@provider.respond_to?(:shell_out!)).to be true
-  end
-
-  it "should mixin shell_out_with_systems_locale" do
-    expect(@provider.respond_to?(:shell_out_with_systems_locale)).to be true
   end
 
   it "should store the resource passed to new as new_resource" do
@@ -192,14 +187,6 @@ describe Chef::Provider do
         expect { provider.run_action(:foo) }.to raise_error(Chef::Exceptions::InvalidResourceSpecification)
       end
 
-    end
-  end
-
-  context "when using use_inline_resources" do
-    it "should log a deprecation warning" do
-      pending Chef::VERSION.start_with?("14.1")
-      expect(Chef).to receive(:deprecated).with(:use_inline_resources, kind_of(String))
-      Class.new(described_class) { use_inline_resources }
     end
   end
 end

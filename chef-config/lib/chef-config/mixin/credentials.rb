@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2017, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,42 +15,87 @@
 # limitations under the License.
 #
 
-require "tomlrb"
-require "chef-config/path_helper"
+autoload :Tomlrb, "tomlrb"
+require_relative "../path_helper"
+require "chef-utils/dist" unless defined?(ChefUtils::Dist)
 
 module ChefConfig
   module Mixin
+    # Helper methods for working with credentials files.
+    #
+    # @since 13.7
+    # @api internal
     module Credentials
+      # Compute the active credentials profile name.
+      #
+      # The lookup order is argument (from --profile), environment variable
+      # ($CHEF_PROFILE), context file (~/.chef/context), and then "default" as
+      # a fallback.
+      #
+      # @since 14.4
+      # @param profile [String, nil] Optional override for the active profile,
+      #   normally set via a command-line option.
+      # @return [String]
+      def credentials_profile(profile = nil)
+        context_file = PathHelper.home(ChefUtils::Dist::Infra::USER_CONF_DIR, "context").freeze
+        if !profile.nil?
+          profile
+        elsif ENV.include?("CHEF_PROFILE")
+          ENV["CHEF_PROFILE"]
+        elsif File.file?(context_file)
+          File.read(context_file).strip
+        else
+          "default"
+        end
+      end
 
+      # Compute the path to the credentials file.
+      #
+      # @since 14.4
+      # @return [String]
+      def credentials_file_path
+        PathHelper.home(ChefUtils::Dist::Infra::USER_CONF_DIR, "credentials").freeze
+      end
+
+      # Load and parse the credentials file.
+      #
+      # Returns `nil` if the credentials file is unavailable.
+      #
+      # @since 14.4
+      # @return [String, nil]
+      def parse_credentials_file
+        credentials_file = credentials_file_path
+        return nil unless File.file?(credentials_file)
+
+        begin
+          Tomlrb.load_file(credentials_file)
+        rescue => e
+          # TOML's error messages are mostly rubbish, so we'll just give a generic one
+          message = "Unable to parse Credentials file: #{credentials_file}\n"
+          message << e.message
+          raise ChefConfig::ConfigurationError, message
+        end
+      end
+
+      # Load and process the active credentials.
+      #
+      # @see WorkstationConfigLoader#apply_credentials
+      # @param profile [String, nil] Optional override for the active profile,
+      #   normally set via a command-line option.
+      # @return [void]
       def load_credentials(profile = nil)
-        credentials_file = PathHelper.home(".chef", "credentials").freeze
-        context_file = PathHelper.home(".chef", "context").freeze
+        profile = credentials_profile(profile)
+        cred_config = parse_credentials_file
+        return if cred_config.nil? # No credentials, nothing to do here.
 
-        return unless File.file?(credentials_file)
+        if cred_config[profile].nil?
+          # Unknown profile name. For "default" just silently ignore, otherwise
+          # raise an error.
+          return if profile == "default"
 
-        context = File.read(context_file) if File.file?(context_file)
-
-        environment = ENV.fetch("CHEF_PROFILE", nil)
-
-        profile = if !profile.nil?
-                    profile
-                  elsif !environment.nil?
-                    environment
-                  elsif !context.nil?
-                    context
-                  else
-                    "default"
-                  end
-
-        config = Tomlrb.load_file(credentials_file)
-        apply_credentials(config[profile], profile)
-      rescue ChefConfig::ConfigurationError
-        raise
-      rescue => e
-        # TOML's error messages are mostly rubbish, so we'll just give a generic one
-        message = "Unable to parse Credentials file: #{credentials_file}\n"
-        message << e.message
-        raise ChefConfig::ConfigurationError, message
+          raise ChefConfig::ConfigurationError, "Profile #{profile} doesn't exist. Please add it to #{credentials_file_path}."
+        end
+        apply_credentials(cred_config[profile], profile)
       end
     end
   end

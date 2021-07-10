@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,7 +43,7 @@ describe Chef::DataBagItem do
     end
 
     it "should throw an ArgumentError if you feed it anything but a string" do
-      expect { data_bag_item.data_bag Hash.new }.to raise_error(ArgumentError)
+      expect { data_bag_item.data_bag({}) }.to raise_error(ArgumentError)
     end
   end
 
@@ -53,7 +53,7 @@ describe Chef::DataBagItem do
     end
 
     it "should let you set the raw_data with a hash containing symbols" do
-      expect { data_bag_item.raw_data = { :id => "octahedron" } }.not_to raise_error
+      expect { data_bag_item.raw_data = { id: "octahedron" } }.not_to raise_error
     end
 
     it "should let you set the raw_data from a mash" do
@@ -148,12 +148,7 @@ describe Chef::DataBagItem do
     end
 
     it "implements all the methods of Hash" do
-      methods = [:rehash, :to_hash, :[], :fetch, :[]=, :store, :default,
-      :default=, :default_proc, :index, :size, :length,
-      :empty?, :each_value, :each_key, :each_pair, :each, :keys, :values,
-      :values_at, :delete, :delete_if, :reject!, :clear,
-      :invert, :update, :replace, :merge!, :merge, :has_key?, :has_value?,
-      :key?, :value?]
+      methods = Hash.public_instance_methods
       methods.each do |m|
         expect(data_bag_item).to respond_to(m)
       end
@@ -297,8 +292,8 @@ describe Chef::DataBagItem do
     end
 
     it "should create if the item is not found" do
-      exception = double("404 error", :code => "404")
-      expect(server).to receive(:put).and_raise(Net::HTTPServerException.new("foo", exception))
+      exception = double("404 error", code: "404")
+      expect(server).to receive(:put).and_raise(Net::HTTPClientException.new("foo", exception))
       expect(server).to receive(:post).with("data/books", data_bag_item)
       data_bag_item.save
     end

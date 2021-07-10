@@ -1,6 +1,6 @@
 #
 # Author:: Stephen Haynes (<sh@nomitor.com>)
-# Copyright:: Copyright 2009-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -44,28 +44,28 @@ class Chef
             # new or existing group. Because pw groupadd does not support the -m
             # and -d options used by manage_group, we treat group creation as a
             # special case and use -M.
-            logger.trace("#{new_resource} setting group members: #{new_resource.members.join(',')}")
+            logger.debug("#{new_resource} setting group members: #{new_resource.members.join(",")}")
             command += [ "-M", new_resource.members.join(",") ]
           end
 
-          shell_out_compact!(command)
+          shell_out!(command)
         end
 
         # Manage the group when it already exists
         def manage_group
           member_options = set_members_options
           if member_options.empty?
-            shell_out_compact!("pw", "groupmod", set_options)
+            shell_out!("pw", "groupmod", set_options)
           else
             member_options.each do |option|
-              shell_out_compact!("pw", "groupmod", set_options, option)
+              shell_out!("pw", "groupmod", set_options, option)
             end
           end
         end
 
         # Remove the group
         def remove_group
-          shell_out_compact!("pw", "groupdel", new_resource.group_name)
+          shell_out!("pw", "groupdel", new_resource.group_name)
         end
 
         # Little bit of magic as per Adam's useradd provider to pull and assign the command line flags
@@ -75,7 +75,7 @@ class Chef
         def set_options
           opts = [ new_resource.group_name ]
           if new_resource.gid && (current_resource.gid != new_resource.gid)
-            logger.trace("#{new_resource}: current gid (#{current_resource.gid}) doesnt match target gid (#{new_resource.gid}), changing it")
+            logger.trace("#{new_resource}: current gid (#{current_resource.gid}) doesn't match target gid (#{new_resource.gid}), changing it")
             opts << "-g"
             opts << new_resource.gid
           end
@@ -119,12 +119,12 @@ class Chef
           end
 
           unless members_to_be_added.empty?
-            logger.trace("#{new_resource} adding group members: #{members_to_be_added.join(',')}")
+            logger.debug("#{new_resource} adding group members: #{members_to_be_added.join(",")}")
             opts << [ "-m", members_to_be_added.join(",") ]
           end
 
           unless members_to_be_removed.empty?
-            logger.trace("#{new_resource} removing group members: #{members_to_be_removed.join(',')}")
+            logger.debug("#{new_resource} removing group members: #{members_to_be_removed.join(",")}")
             opts << [ "-d", members_to_be_removed.join(",") ]
           end
 

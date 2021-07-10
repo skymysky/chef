@@ -1,6 +1,6 @@
 #
 # Author:: Tyler Ball (<tball@chef.io>)
-# Copyright:: Copyright 2014-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require "chef/resource"
+require_relative "../resource"
 
 class Chef
   class Resource
@@ -26,12 +26,13 @@ class Chef
     # @attr [Resource] notifying_resource the Chef resource performing the notification
     class Notification
 
-      attr_accessor :resource, :action, :notifying_resource
+      attr_accessor :resource, :action, :notifying_resource, :unified_mode
 
-      def initialize(resource, action, notifying_resource)
+      def initialize(resource, action, notifying_resource, unified_mode = false)
         @resource = resource
         @action = action&.to_sym
         @notifying_resource = notifying_resource
+        @unified_mode = unified_mode
       end
 
       # Is the current notification a duplicate of another notification
@@ -52,14 +53,14 @@ class Chef
       # @param [ResourceCollection] resource_collection
       #
       # @return [void]
-      def resolve_resource_reference(resource_collection)
-        return resource if resource.kind_of?(Chef::Resource) && notifying_resource.kind_of?(Chef::Resource)
+      def resolve_resource_reference(resource_collection, always_raise = false)
+        return resource if resource.is_a?(Chef::Resource) && notifying_resource.is_a?(Chef::Resource)
 
-        if not(resource.kind_of?(Chef::Resource))
-          fix_resource_reference(resource_collection)
+        unless resource.is_a?(Chef::Resource)
+          fix_resource_reference(resource_collection, always_raise)
         end
 
-        if not(notifying_resource.kind_of?(Chef::Resource))
+        unless notifying_resource.is_a?(Chef::Resource)
           fix_notifier_reference(resource_collection)
         end
       end
@@ -69,7 +70,7 @@ class Chef
       # @param [ResourceCollection] resource_collection
       #
       # @return [void]
-      def fix_resource_reference(resource_collection)
+      def fix_resource_reference(resource_collection, always_raise = false)
         matching_resource = resource_collection.find(resource)
         if Array(matching_resource).size > 1
           msg = "Notification #{self} from #{notifying_resource} was created with a reference to multiple resources, "\
@@ -79,18 +80,21 @@ class Chef
         self.resource = matching_resource
 
       rescue Chef::Exceptions::ResourceNotFound => e
-        err = Chef::Exceptions::ResourceNotFound.new(<<-FAIL)
-resource #{notifying_resource} is configured to notify resource #{resource} with action #{action}, \
-but #{resource} cannot be found in the resource collection. #{notifying_resource} is defined in \
-#{notifying_resource.source_line}
-        FAIL
-        err.set_backtrace(e.backtrace)
-        raise err
+        # in unified mode we allow lazy notifications to resources not yet declared
+        if !unified_mode || always_raise
+          err = Chef::Exceptions::ResourceNotFound.new(<<~FAIL)
+            resource #{notifying_resource} is configured to notify resource #{resource} with action #{action}, \
+            but #{resource} cannot be found in the resource collection. #{notifying_resource} is defined in \
+            #{notifying_resource.source_line}
+          FAIL
+          err.set_backtrace(e.backtrace)
+          raise err
+        end
       rescue Chef::Exceptions::InvalidResourceSpecification => e
-        err = Chef::Exceptions::InvalidResourceSpecification.new(<<-F)
-Resource #{notifying_resource} is configured to notify resource #{resource} with action #{action}, \
-but #{resource.inspect} is not valid syntax to look up a resource in the resource collection. Notification \
-is defined near #{notifying_resource.source_line}
+        err = Chef::Exceptions::InvalidResourceSpecification.new(<<~F)
+          Resource #{notifying_resource} is configured to notify resource #{resource} with action #{action}, \
+          but #{resource.inspect} is not valid syntax to look up a resource in the resource collection. Notification \
+          is defined near #{notifying_resource.source_line}
         F
         err.set_backtrace(e.backtrace)
         raise err
@@ -112,18 +116,18 @@ is defined near #{notifying_resource.source_line}
         self.notifying_resource = matching_notifier
 
       rescue Chef::Exceptions::ResourceNotFound => e
-        err = Chef::Exceptions::ResourceNotFound.new(<<-FAIL)
-Resource #{resource} is configured to receive notifications from #{notifying_resource} with action #{action}, \
-but #{notifying_resource} cannot be found in the resource collection. #{resource} is defined in \
-#{resource.source_line}
+        err = Chef::Exceptions::ResourceNotFound.new(<<~FAIL)
+          Resource #{resource} is configured to receive notifications from #{notifying_resource} with action #{action}, \
+          but #{notifying_resource} cannot be found in the resource collection. #{resource} is defined in \
+          #{resource.source_line}
         FAIL
         err.set_backtrace(e.backtrace)
         raise err
       rescue Chef::Exceptions::InvalidResourceSpecification => e
-        err = Chef::Exceptions::InvalidResourceSpecification.new(<<-F)
-Resource #{resource} is configured to receive notifications from  #{notifying_resource} with action #{action}, \
-but #{notifying_resource.inspect} is not valid syntax to look up a resource in the resource collection. Notification \
-is defined near #{resource.source_line}
+        err = Chef::Exceptions::InvalidResourceSpecification.new(<<~F)
+          Resource #{resource} is configured to receive notifications from  #{notifying_resource} with action #{action}, \
+          but #{notifying_resource.inspect} is not valid syntax to look up a resource in the resource collection. Notification \
+          is defined near #{resource.source_line}
         F
         err.set_backtrace(e.backtrace)
         raise err
@@ -131,6 +135,7 @@ is defined near #{resource.source_line}
 
       def ==(other)
         return false unless other.is_a?(self.class)
+
         other.resource == resource && other.action == action && other.notifying_resource == notifying_resource
       end
 

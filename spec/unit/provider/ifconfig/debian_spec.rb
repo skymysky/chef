@@ -119,11 +119,11 @@ describe Chef::Provider::Ifconfig::Debian do
 
       context "when the /etc/network/interfaces file has the source line" do
         let(:expected_string) do
-          <<-EOF
-a line
-source #{tempdir_path}/*
-another line
-EOF
+          <<~EOF
+            a line
+            source #{tempdir_path}/*
+            another line
+          EOF
         end
 
         before do
@@ -142,11 +142,11 @@ EOF
 
       context "when the /etc/network/interfaces file does not have the source line" do
         let(:expected_string) do
-          <<-EOF
-a line
-another line
-source #{tempdir_path}/*
-EOF
+          <<~EOF
+            a line
+            another line
+            source #{tempdir_path}/*
+          EOF
         end
 
         before do
@@ -246,10 +246,10 @@ EOF
 
         context "when the /etc/network/interfaces file has the source line" do
           let(:expected_string) do
-            <<-EOF
-a line
-source #{tempdir_path}/*
-another line
+            <<~EOF
+              a line
+              source #{tempdir_path}/*
+              another line
             EOF
           end
 
@@ -267,10 +267,10 @@ another line
 
         context "when the /etc/network/interfaces file does not have the source line" do
           let(:expected_string) do
-            <<-EOF
-a line
-another line
-source #{tempdir_path}/*
+            <<~EOF
+              a line
+              another line
+              source #{tempdir_path}/*
             EOF
           end
 

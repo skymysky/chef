@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2018-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -60,7 +60,7 @@ describe Chef::Provider::Package::Yum::YumCache do
     expect( yum_cache.version_available?("foo", "1.2.3", "x86_64") ).to be true
   end
 
-  [ :refresh, :reload, :reload_installed, :reload_provides, :reset, :reset_installed ].each do |method|
+  %i{refresh reload reload_installed reload_provides reset reset_installed}.each do |method|
     it "restarts the python helper when #{method} is called" do
       expect( python_helper ).to receive(:restart)
       yum_cache.send(method)

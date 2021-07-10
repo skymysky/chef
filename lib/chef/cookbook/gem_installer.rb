@@ -1,5 +1,4 @@
-#--
-# Copyright:: Copyright (c) 2010-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +14,8 @@
 # limitations under the License.
 #
 
-require "tmpdir"
-require "chef/mixin/shell_out"
+require "tmpdir" unless defined?(Dir.mktmpdir)
+require_relative "../mixin/shell_out"
 
 class Chef
   class Cookbook
@@ -40,7 +39,15 @@ class Chef
 
         cookbook_collection.each_value do |cookbook_version|
           cookbook_version.metadata.gems.each do |args|
-            cookbook_gems[args.first] += args[1..-1]
+            if cookbook_gems[args.first].last.is_a?(Hash)
+              args << {} unless args.last.is_a?(Hash)
+              args.last.merge!(cookbook_gems[args.first].pop) do |key, v1, v2|
+                raise Chef::Exceptions::GemRequirementConflict.new(args.first, key, v1, v2) if v1 != v2
+
+                v2
+              end
+            end
+            cookbook_gems[args.first] += args[1..]
           end
         end
 
@@ -50,7 +57,7 @@ class Chef
           begin
             Dir.mktmpdir("chef-gem-bundle") do |dir|
               File.open("#{dir}/Gemfile", "w+") do |tf|
-                Array(Chef::Config[:rubygems_url] || "https://www.rubygems.org").each do |s|
+                Array(Chef::Config[:rubygems_url] || "https://rubygems.org").each do |s|
                   tf.puts "source '#{s}'"
                 end
                 cookbook_gems.each do |gem_name, args|
@@ -59,8 +66,17 @@ class Chef
                 tf.close
                 Chef::Log.trace("generated Gemfile contents:")
                 Chef::Log.trace(IO.read(tf.path))
-                so = shell_out!("bundle install", cwd: dir, env: { "PATH" => path_with_prepended_ruby_bin })
-                Chef::Log.info(so.stdout)
+                # Skip installation only if Chef::Config[:skip_gem_metadata_installation] option is true
+                unless Chef::Config[:skip_gem_metadata_installation]
+                  # Add additional options to bundle install
+                  cmd = [ "bundle", "install", Chef::Config[:gem_installer_bundler_options] ]
+                  env = {
+                    "PATH" => path_with_prepended_ruby_bin,
+                    "BUNDLE_SILENCE_ROOT_WARNING" => "1",
+                  }
+                  so = shell_out!(cmd, cwd: dir, env: env)
+                  Chef::Log.info(so.stdout)
+                end
               end
             end
             Gem.clear_paths

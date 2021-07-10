@@ -1,6 +1,6 @@
 #
 # Author:: Dheeraj Dubey(<dheeraj.dubey@msystechnologies.com>)
-# Copyright:: Copyright 2008-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@ describe Chef::Resource::PowershellPackage do
     expect(resource).to be_a_kind_of(Chef::Resource::Package)
   end
 
-  #to check the value of resource.resource_name
+  # to check the value of resource.resource_name
   it "has a resource name of :powershell_package" do
     expect(resource.resource_name).to eql(:powershell_package)
   end
@@ -85,5 +85,14 @@ describe Chef::Resource::PowershellPackage do
   it "the source setter accepts strings" do
     resource.source("MyGallery")
     expect(resource.source).to eql("MyGallery")
+  end
+
+  it "the skip_publisher_check default is false" do
+    expect(resource.skip_publisher_check).to eql(false)
+  end
+
+  it "the skip_publisher_check setter accepts booleans" do
+    resource.skip_publisher_check(true)
+    expect(resource.skip_publisher_check).to eql(true)
   end
 end

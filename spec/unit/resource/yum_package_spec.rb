@@ -1,6 +1,6 @@
 #
 # Author:: AJ Christensen (<aj@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,8 +41,8 @@ describe Chef::Resource::YumPackage do
   # the new_resource.package_named/version/arch properties.  until that is fixed properly
   # we need to coerce and dup those properties into normal arrays.  this does not affect
   # strings because those are not mutated in place and they are not (currently) frozen
-  # in immutable attributes (even though they really, really should be).
-  context "when passed immutable node attribute arrays" do
+  # in immutable properties (even though they really, really should be).
+  context "when passed immutable node property arrays" do
     let(:node) { Chef::Node.new }
 
     before do
@@ -90,19 +90,19 @@ describe Chef::Resource::YumPackage, "flush_cache" do
   end
 
   it "should default the flush timing to false" do
-    flush_hash = { :before => false, :after => false }
+    flush_hash = { before: false, after: false }
     expect(@resource.flush_cache).to eq(flush_hash)
   end
 
   it "should allow you to set the flush timing with an array" do
-    flush_array = [ :before, :after ]
-    flush_hash = { :before => true, :after => true }
+    flush_array = %i{before after}
+    flush_hash = { before: true, after: true }
     @resource.flush_cache(flush_array)
     expect(@resource.flush_cache).to eq(flush_hash)
   end
 
   it "should allow you to set the flush timing with a hash" do
-    flush_hash = { :before => true, :after => true }
+    flush_hash = { before: true, after: true }
     @resource.flush_cache(flush_hash)
     expect(@resource.flush_cache).to eq(flush_hash)
   end

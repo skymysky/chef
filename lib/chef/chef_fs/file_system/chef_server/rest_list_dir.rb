@@ -1,6 +1,6 @@
 #
 # Author:: John Keiser (<jkeiser@chef.io>)
-# Copyright:: Copyright 2012-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,9 +16,9 @@
 # limitations under the License.
 #
 
-require "chef/chef_fs/file_system/base_fs_dir"
-require "chef/chef_fs/file_system/chef_server/rest_list_entry"
-require "chef/chef_fs/file_system/exceptions"
+require_relative "../base_fs_dir"
+require_relative "rest_list_entry"
+require_relative "../exceptions"
 
 class Chef
   module ChefFS
@@ -71,13 +71,13 @@ class Chef
           # Children are foo.json and bar.json in this case.
           #
           def children
-              # Grab the names of the children, append json, and make child entries
+            # Grab the names of the children, append json, and make child entries
             @children ||= root.get_json(api_path).keys.sort.map do |key|
               make_child_entry(key, true)
             end
           rescue Timeout::Error => e
             raise Chef::ChefFS::FileSystem::OperationFailedError.new(:children, self, e, "Timeout retrieving children: #{e}")
-          rescue Net::HTTPServerException => e
+          rescue Net::HTTPClientException => e
             # 404 = NotFoundError
             if $!.response.code == "404"
 
@@ -90,10 +90,11 @@ class Chef
                   root.get_json(parent.api_path)
                   # Return empty list if the organization exists but /policies didn't work
                   []
-                rescue Net::HTTPServerException => e
+                rescue Net::HTTPClientException => e
                   if e.response.code == "404"
                     raise Chef::ChefFS::FileSystem::NotFoundError.new(self, $!)
                   end
+
                   raise Chef::ChefFS::FileSystem::OperationFailedError.new(:children, self, e, "HTTP error retrieving children: #{e}")
                 end
               else
@@ -133,7 +134,7 @@ class Chef
               rest.post(api_path, object)
             rescue Timeout::Error => e
               raise Chef::ChefFS::FileSystem::OperationFailedError.new(:create_child, self, e, "Timeout creating '#{name}': #{e}")
-            rescue Net::HTTPServerException => e
+            rescue Net::HTTPClientException => e
               # 404 = NotFoundError
               if e.response.code == "404"
                 raise Chef::ChefFS::FileSystem::NotFoundError.new(self, e)

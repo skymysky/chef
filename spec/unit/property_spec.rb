@@ -51,7 +51,8 @@ describe "Chef::Resource.property" do
   def self.english_join(values)
     return "<nothing>" if values.size == 0
     return values[0].inspect if values.size == 1
-    "#{values[0..-2].map { |v| v.inspect }.join(", ")} and #{values[-1].inspect}"
+
+    "#{values[0..-2].map(&:inspect).join(", ")} and #{values[-1].inspect}"
   end
 
   def self.with_property(*properties, &block)
@@ -64,7 +65,7 @@ describe "Chef::Resource.property" do
     if properties.size == 1
       description = "With property #{properties.first}"
     else
-      description = "With properties #{english_join(properties.map { |property| "#{property.inspect}" })}"
+      description = "With properties #{english_join(properties.map { |property| (property.inspect).to_s })}"
     end
     context description, *tags do
       before do
@@ -110,17 +111,17 @@ describe "Chef::Resource.property" do
 
   with_property ":Straße" do
     it "properties with UTF-8 in their name work" do
-      expect(resource.Straße).to eql(nil)
-      expect(resource.Straße "foo").to eql("foo")
-      expect(resource.Straße).to eql("foo")
-      expect(resource.Straße = "bar").to eql("bar")
-      expect(resource.Straße).to eql("bar")
+      expect(resource.Straße).to eql(nil) # rubocop: disable Naming/AsciiIdentifiers
+      expect(resource.Straße "foo").to eql("foo") # rubocop: disable Naming/AsciiIdentifiers
+      expect(resource.Straße).to eql("foo") # rubocop: disable Naming/AsciiIdentifiers
+      expect(resource.Straße = "bar").to eql("bar") # rubocop: disable Naming/AsciiIdentifiers
+      expect(resource.Straße).to eql("bar") # rubocop: disable Naming/AsciiIdentifiers
     end
   end
 
   context "deprecated properties" do
     it "does not create a deprecation warning on definition" do
-      expect { resource_class.class_eval { property :x, String, deprecated: 10 } }.not_to raise_error Chef::Exceptions::DeprecatedFeatureError
+      expect { resource_class.class_eval { property :x, String, deprecated: 10 } }.not_to raise_error
     end
 
     with_property ":x, deprecated: 'a deprecated property'" do
@@ -540,13 +541,16 @@ describe "Chef::Resource.property" do
         it "when x is not set, it returns ''" do
           expect(resource.x).to eq ""
         end
-        it "x is immutable" do
-          expect { resource.x << "foo" }.to raise_error(RuntimeError, "can't modify frozen String")
+        it "setting x does not mutate the default" do
+          expect(resource.x).to eq ""
+          resource.x << "foo"
+          expect(resource.x).to eq "foo"
+          expect(resource_class.new("other").x).to eq ""
         end
       end
 
       with_property ":x, default: lazy { '' }" do
-        it "x is immutable" do
+        it "setting x does not mutate the default" do
           expect(resource.x).to eq ""
           resource.x << "foo"
           expect(resource.x).to eq "foo"
@@ -560,16 +564,14 @@ describe "Chef::Resource.property" do
         it "when x is not set, it returns {}" do
           expect(resource.x).to eq({})
         end
-        it "x is immutable" do
-          expect { resource.x["foo"] = "bar" }.to raise_error(RuntimeError, "can't modify frozen Hash")
+        it "setting x does not mutate the default" do
+          expect(resource.x).to eq({})
+          resource.x["plants"] = "zombies"
+          expect(resource.x).to eq({ "plants" => "zombies" })
+          expect(resource_class.new("other").x).to eq({})
         end
-        it "The same exact value is returned multiple times in a row" do
-          value = resource.x
-          expect(value).to eq({})
-          expect(resource.x.object_id).to eq(value.object_id)
-        end
-        it "Multiple instances of x receive the exact same value" do
-          expect(resource.x.object_id).to eq(resource_class.new("blah2").x.object_id)
+        it "Multiple instances of x receive different values" do
+          expect(resource.x.object_id).not_to eq(resource_class.new("blah2").x.object_id)
         end
       end
 
@@ -593,14 +595,14 @@ describe "Chef::Resource.property" do
         it "when x is not set, it returns [{foo: 'bar'}]" do
           expect(resource.x).to eq([{ foo: "bar" }])
         end
-        it "x is immutable" do
-          expect { resource.x << :other }.to raise_error(RuntimeError, "can't modify frozen Array")
+        it "setting x does not mutate the default" do
+          expect(resource.x).to eq([{ foo: "bar" }])
+          resource.x[0][:foo] << "baz"
+          expect(resource.x).to eq([{ foo: "barbaz" }])
+          expect(resource_class.new("other").x).to eq([{ foo: "bar" }])
         end
-        it "x.first is immutable" do
-          expect { resource.x.first[:foo] = "other" }.to raise_error(RuntimeError, "can't modify frozen Hash")
-        end
-        it "x.first[:foo] is immutable" do
-          expect { resource.x.first[:foo] << "other" }.to raise_error(RuntimeError, "can't modify frozen String")
+        it "Multiple instances of x receive different values" do
+          expect(resource.x.object_id).not_to eq(resource_class.new("blah2").x.object_id)
         end
       end
     end
@@ -707,10 +709,10 @@ describe "Chef::Resource.property" do
           expect(resource.x).to eq "hi1"
           expect(Namer.current_index).to eq 1
         end
-        it "when x is retrieved, coercion is run each time" do
+        it "when x is retrieved, coercion is run exactly once" do
           expect(resource.x).to eq "101"
-          expect(resource.x).to eq "102"
-          expect(Namer.current_index).to eq 2
+          expect(resource.x).to eq "101"
+          expect(Namer.current_index).to eq 1
         end
       end
 
@@ -818,7 +820,7 @@ describe "Chef::Resource.property" do
         expect(resource.x).to eq 2
         expect(Namer.current_index).to eq 2
       end
-      it "setting the same lazy value on two different instances runs it on each instancee" do
+      it "setting the same lazy value on two different instances runs it on each instances" do
         resource2 = resource_class.new("blah2")
         l = lazy { Namer.next_index }
         resource.x l
@@ -1021,6 +1023,9 @@ describe "Chef::Resource.property" do
         it "defaults x to resource.name" do
           expect(resource.x).to eq "blah"
         end
+        it "defaults to being part of the identity if there is no other identity" do
+          expect(resource.identity).to eq "blah"
+        end
         it "does not pick up resource.name if set" do
           expect(resource.x 10).to eq 10
           expect(resource.x).to eq 10
@@ -1051,33 +1056,33 @@ describe "Chef::Resource.property" do
       context "default ordering deprecation warnings" do
         it "emits an error for property :x, default: 10, #{name}: true" do
           expect { resource_class.property :x, :default => 10, name.to_sym => true }.to raise_error ArgumentError,
-            /A property cannot be both a name_property\/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)/
+            %r{A property cannot be both a name_property/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)}
         end
         it "emits an error for property :x, default: nil, #{name}: true" do
           expect { resource_class.property :x, :default => nil, name.to_sym => true }.to raise_error ArgumentError,
-            /A property cannot be both a name_property\/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)/
+            %r{A property cannot be both a name_property/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)}
         end
         it "emits an error for property :x, #{name}: true, default: 10" do
           expect { resource_class.property :x, name.to_sym => true, :default => 10 }.to raise_error ArgumentError,
-            /A property cannot be both a name_property\/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)/
+            %r{A property cannot be both a name_property/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)}
         end
         it "emits an error for property :x, #{name}: true, default: nil" do
           expect { resource_class.property :x, name.to_sym => true, :default => nil }.to raise_error ArgumentError,
-            /A property cannot be both a name_property\/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)/
+            %r{A property cannot be both a name_property/name_attribute and have a default value. Use one or the other on property x of resource chef_resource_property_spec_(\d+)}
         end
       end
     end
   end
 
   it "raises an error if both name_property and name_attribute are specified" do
-    expect { resource_class.property :x, :name_property => false, :name_attribute => 1 }.to raise_error ArgumentError,
-      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)./
-    expect { resource_class.property :x, :name_property => false, :name_attribute => nil }.to raise_error ArgumentError,
-      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)./
-    expect { resource_class.property :x, :name_property => false, :name_attribute => false }.to raise_error ArgumentError,
-      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)./
-    expect { resource_class.property :x, :name_property => true, :name_attribute => true }.to raise_error ArgumentError,
-      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)./
+    expect { resource_class.property :x, name_property: false, name_attribute: 1 }.to raise_error ArgumentError,
+      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)/
+    expect { resource_class.property :x, name_property: false, name_attribute: nil }.to raise_error ArgumentError,
+      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)/
+    expect { resource_class.property :x, name_property: false, name_attribute: false }.to raise_error ArgumentError,
+      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)/
+    expect { resource_class.property :x, name_property: true, name_attribute: true }.to raise_error ArgumentError,
+      /name_attribute and name_property are functionally identical and both cannot be specified on a property at once. Use just one on property x of resource chef_resource_property_spec_(\d+)/
   end
 
   context "property_type" do
@@ -1085,13 +1090,13 @@ describe "Chef::Resource.property" do
       expect do
         module ::PropertySpecPropertyTypes
           include Chef::Mixin::Properties
-          property_type(is: [:a, :b], default: :c)
+          property_type(is: %i{a b}, default: :c)
         end
       end.to raise_error(Chef::Exceptions::ValidationFailed)
       expect do
         module ::PropertySpecPropertyTypes
           include Chef::Mixin::Properties
-          property_type(is: [:a, :b], default: :b)
+          property_type(is: %i{a b}, default: :b)
         end
       end.not_to raise_error
     end
@@ -1100,8 +1105,8 @@ describe "Chef::Resource.property" do
       before :all do
         module ::PropertySpecPropertyTypes
           include Chef::Mixin::Properties
-          ABType = property_type(is: [:a, :b])
-          CDType = property_type(is: [:c, :d])
+          ABType = property_type(is: %i{a b})
+          CDType = property_type(is: %i{c d})
         end
       end
 
@@ -1226,6 +1231,99 @@ describe "Chef::Resource.property" do
         expect(resource_class.properties[:x]).to be_kind_of(CustomPropertyType)
         expect(resource_class.properties[:x].default).to eq(10)
       end
+    end
+  end
+
+  context "#copy_properties_from" do
+    let(:events) { Chef::EventDispatch::Dispatcher.new }
+    let(:node) { Chef::Node.new }
+    let(:run_context) { Chef::RunContext.new(node, {}, events) }
+
+    let(:thing_one_class) do
+      Class.new(Chef::Resource) do
+        resource_name :thing_one
+        provides :thing_two
+        property :foo, String
+        property :bar, String
+      end
+    end
+
+    let(:thing_two_class) do
+      Class.new(Chef::Resource) do
+        resource_name :thing_two
+        provides :thing_two
+        property :foo, String
+        property :bar, String
+      end
+    end
+
+    let(:thing_three_class) do
+      Class.new(Chef::Resource) do
+        resource_name :thing_three
+        provides :thing_three
+        property :foo, String
+        property :bar, String
+        property :baz, String
+      end
+    end
+
+    let(:thing_one_resource) do
+      thing_one_class.new("name_one", run_context)
+    end
+
+    let(:thing_two_resource) do
+      thing_two_class.new("name_two", run_context)
+    end
+
+    let(:thing_three_resource) do
+      thing_three_class.new("name_three", run_context)
+    end
+
+    it "copies foo and bar" do
+      thing_one_resource.foo "foo"
+      thing_one_resource.bar "bar"
+      thing_two_resource.copy_properties_from thing_one_resource
+      expect(thing_two_resource.name).to eql("name_two")
+      expect(thing_two_resource.foo).to eql("foo")
+      expect(thing_two_resource.bar).to eql("bar")
+    end
+
+    it "copies only foo when it is only included" do
+      thing_one_resource.foo "foo"
+      thing_one_resource.bar "bar"
+      thing_two_resource.copy_properties_from(thing_one_resource, :foo)
+      expect(thing_two_resource.name).to eql("name_two")
+      expect(thing_two_resource.foo).to eql("foo")
+      expect(thing_two_resource.bar).to eql(nil)
+    end
+
+    it "copies foo and name when bar is excluded" do
+      thing_one_resource.foo "foo"
+      thing_one_resource.bar "bar"
+      thing_two_resource.copy_properties_from(thing_one_resource, exclude: [ :bar ])
+      expect(thing_two_resource.name).to eql("name_one")
+      expect(thing_two_resource.foo).to eql("foo")
+      expect(thing_two_resource.bar).to eql(nil)
+    end
+
+    it "copies only foo when bar and name are excluded" do
+      thing_one_resource.foo "foo"
+      thing_one_resource.bar "bar"
+      thing_two_resource.copy_properties_from(thing_one_resource, exclude: %i{name bar})
+      expect(thing_two_resource.name).to eql("name_two")
+      expect(thing_two_resource.foo).to eql("foo")
+      expect(thing_two_resource.bar).to eql(nil)
+    end
+
+    it "blows up if the target resource does not implement a set property" do
+      thing_three_resource.baz "baz"
+      expect { thing_two_resource.copy_properties_from(thing_three_resource) }.to raise_error(NoMethodError)
+    end
+
+    it "does not blow up if blows up if the target resource does not implement a set properly" do
+      thing_three_resource.foo "foo"
+      thing_three_resource.bar "bar"
+      thing_two_resource.copy_properties_from(thing_three_resource)
     end
   end
 end

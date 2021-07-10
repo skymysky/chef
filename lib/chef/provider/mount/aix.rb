@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2009-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-require "chef/provider/mount"
+require_relative "../mount"
 
 class Chef
   class Provider
@@ -48,7 +48,7 @@ class Chef
           end
           # lsfs o/p = #MountPoint:Device:Vfs:Nodename:Type:Size:Options:AutoMount:Acct
           # search only for current mount point
-          shell_out("lsfs -c #{@new_resource.mount_point}").stdout.each_line do |line|
+          shell_out("lsfs", "-c", @new_resource.mount_point).stdout.each_line do |line|
             case line
             when /^#\s/
               next
@@ -110,7 +110,7 @@ class Chef
             when /#{search_device}\s+#{Regexp.escape(@new_resource.mount_point)}/
               mounted = true
               logger.trace("Special device #{device_logstring} mounted as #{@new_resource.mount_point}")
-            when /^[\/\w]+\s+#{Regexp.escape(@new_resource.mount_point)}\s+/
+            when %r{^[/\w]+\s+#{Regexp.escape(@new_resource.mount_point)}\s+}
               mounted = false
               logger.trace("Found conflicting mount point #{@new_resource.mount_point} in /etc/fstab")
             end
@@ -121,39 +121,40 @@ class Chef
         def mount_fs
           unless @current_resource.mounted
             mountable?
-            command = "mount -v #{@new_resource.fstype}"
+            command = [ "mount", "-v", @new_resource.fstype ]
 
-            if !(@new_resource.options.nil? || @new_resource.options.empty?)
-              command << " -o #{@new_resource.options.join(',')}"
+            unless @new_resource.options.nil? || @new_resource.options.empty?
+              command << "-o"
+              command << @new_resource.options.join(",")
             end
 
             command << case @new_resource.device_type
                        when :device
-                         " #{device_real}"
+                         device_real
                        when :label
-                         " -L #{@new_resource.device}"
+                         [ "-L", @new_resource.device ]
                        when :uuid
-                         " -U #{@new_resource.device}"
+                         [ "-U", @new_resource.device ]
                        end
-            command << " #{@new_resource.mount_point}"
+            command << @new_resource.mount_point
             shell_out!(command)
             logger.trace("#{@new_resource} is mounted at #{@new_resource.mount_point}")
           else
-            logger.trace("#{@new_resource} is already mounted at #{@new_resource.mount_point}")
+            logger.debug("#{@new_resource} is already mounted at #{@new_resource.mount_point}")
           end
         end
 
         def remount_command
           if !(@new_resource.options.nil? || @new_resource.options.empty?)
-            "mount -o remount,#{@new_resource.options.join(',')} #{@new_resource.device} #{@new_resource.mount_point}"
+            [ "mount", "-o", "remount,#{@new_resource.options.join(",")}", @new_resource.device, @new_resource.mount_point ]
           else
-            "mount -o remount #{@new_resource.device} #{@new_resource.mount_point}"
+            [ "mount", "-o", "remount", @new_resource.device, @new_resource.mount_point ]
           end
         end
 
         def enable_fs
           if @current_resource.enabled && mount_options_unchanged?
-            logger.trace("#{@new_resource} is already enabled - nothing to do")
+            logger.debug("#{@new_resource} is already enabled - nothing to do")
             return nil
           end
 
@@ -163,7 +164,7 @@ class Chef
             disable_fs
           end
           ::File.open("/etc/filesystems", "a") do |fstab|
-            fstab.puts("#{@new_resource.mount_point}:")
+            fstab.puts("\n\n#{@new_resource.mount_point}:")
             if network_device?
               device_details = device_fstab.split(":")
               fstab.puts("\tdev\t\t= #{device_details[1]}")
@@ -173,7 +174,7 @@ class Chef
             end
             fstab.puts("\tvfs\t\t= #{@new_resource.fstype}")
             fstab.puts("\tmount\t\t= false")
-            fstab.puts "\toptions\t\t= #{@new_resource.options.join(',')}" unless @new_resource.options.nil? || @new_resource.options.empty?
+            fstab.puts "\toptions\t\t= #{@new_resource.options.join(",")}" unless @new_resource.options.nil? || @new_resource.options.empty?
             logger.trace("#{@new_resource} is enabled at #{@new_resource.mount_point}")
           end
         end
@@ -195,14 +196,14 @@ class Chef
             found_device = false
             ::File.open("/etc/filesystems", "r").each_line do |line|
               case line
-              when /^\/.+:\s*$/
-                if line =~ /#{Regexp.escape(@new_resource.mount_point)}+:/
+              when %r{^/.+:\s*$}
+                if /#{Regexp.escape(@new_resource.mount_point)}+:/.match?(line)
                   found_device = true
                 else
                   found_device = false
                 end
               end
-              if !found_device
+              unless found_device
                 contents << line
               end
             end
@@ -210,7 +211,7 @@ class Chef
               contents.each { |line| fstab.puts line }
             end
           else
-            logger.trace("#{@new_resource} is not enabled - nothing to do")
+            logger.debug("#{@new_resource} is not enabled - nothing to do")
           end
         end
 

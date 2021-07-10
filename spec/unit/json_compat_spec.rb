@@ -1,6 +1,6 @@
 #
 # Author:: Juanje Ojeda (<juanje.ojeda@gmail.com>)
-# Copyright:: Copyright 2012-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require File.expand_path("../../spec_helper", __FILE__)
+require "spec_helper"
 require "chef/json_compat"
 
 describe Chef::JSONCompat do

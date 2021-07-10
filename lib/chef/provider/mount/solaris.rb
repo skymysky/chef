@@ -1,8 +1,7 @@
-# Encoding: utf-8
 # Author:: Hugo Fichter
 # Author:: Lamont Granquist (<lamont@chef.io>)
 # Author:: Joshua Timberman (<joshua@chef.io>)
-# Copyright:: Copyright 2009-2016, Chef Software, Inc
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,16 +17,16 @@
 # limitations under the License.
 #
 
-require "chef/provider/mount"
-require "chef/log"
-require "forwardable"
+require_relative "../mount"
+require_relative "../../log"
+require "forwardable" unless defined?(Forwardable)
 
 class Chef
   class Provider
     class Mount
       # Mount Solaris File systems
       class Solaris < Chef::Provider::Mount
-        provides :mount, platform: %w{openindiana opensolaris nexentacore omnios solaris2 smartos}
+        provides :mount, platform_family: "solaris_based"
 
         extend Forwardable
 
@@ -76,22 +75,25 @@ class Chef
         def mount_fs
           actual_options = native_options(options)
           actual_options.delete("-")
-          command = "mount -F #{fstype}"
-          command << " -o #{actual_options.join(',')}" unless actual_options.empty?
-          command << " #{device} #{mount_point}"
+          command = [ "mount", "-F", fstype ]
+          unless actual_options.empty?
+            command << "-o"
+            command << actual_options.join(",")
+          end
+          command << [ device, mount_point ]
           shell_out!(command)
         end
 
         def umount_fs
-          shell_out!("umount #{mount_point}")
+          shell_out!("umount", mount_point)
         end
 
         def remount_fs
           # FIXME: Should remount always do the remount or only if the options change?
           actual_options = native_options(options)
           actual_options.delete("-")
-          mount_options = actual_options.empty? ? "" : ",#{actual_options.join(',')}"
-          shell_out!("mount -o remount#{mount_options} #{mount_point}")
+          mount_options = actual_options.empty? ? "" : ",#{actual_options.join(",")}"
+          shell_out!("mount", "-o", "remount#{mount_options}", mount_point)
         end
 
         def enable_fs
@@ -150,12 +152,12 @@ class Chef
         # /dev/dsk/c1t0d0s0 on / type ufs read/write/setuid/devices/intr/largefiles/logging/xattr/onerror=panic/dev=700040 on Tue May  1 11:33:55 2012
         def mounted?
           mounted = false
-          shell_out!("mount -v").stdout.each_line do |line|
+          shell_out!("mount", "-v").stdout.each_line do |line|
             case line
             when /^#{device_regex}\s+on\s+#{Regexp.escape(mount_point)}\s+/
               logger.trace("Special device #{device} is mounted as #{mount_point}")
               mounted = true
-            when /^([\/\w]+)\son\s#{Regexp.escape(mount_point)}\s+/
+            when %r{^([/\w]+)\son\s#{Regexp.escape(mount_point)}\s+}
               logger.trace("Special device #{Regexp.last_match[1]} is mounted as #{mount_point}")
               mounted = false
             end
@@ -177,7 +179,7 @@ class Chef
               # solaris /etc/vfstab format:
               # device         device          mount           FS      fsck    mount   mount
               # to mount       to fsck         point           type    pass    at boot options
-            when /^#{device_regex}\s+[-\/\w]+\s+#{Regexp.escape(mount_point)}\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/
+            when %r{^#{device_regex}\s+[-/\w]+\s+#{Regexp.escape(mount_point)}\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)}
               enabled = true
               fstype = Regexp.last_match[1]
               options = Regexp.last_match[4]
@@ -193,7 +195,7 @@ class Chef
               pass = (Regexp.last_match[2] == "-") ? 0 : Regexp.last_match[2].to_i
               logger.trace("Found mount #{device} to #{mount_point} in #{VFSTAB}")
               next
-            when /^[-\/\w]+\s+[-\/\w]+\s+#{Regexp.escape(mount_point)}\s+/
+            when %r{^[-/\w]+\s+[-/\w]+\s+#{Regexp.escape(mount_point)}\s+}
               # if we find a mountpoint on top of our mountpoint, then we are not enabled
               enabled = false
               logger.trace("Found conflicting mount point #{mount_point} in #{VFSTAB}")

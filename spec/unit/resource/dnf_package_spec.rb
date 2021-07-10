@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,19 +59,19 @@ describe Chef::Resource::DnfPackage, "flush_cache" do
   let(:resource) { Chef::Resource::DnfPackage.new("foo") }
 
   it "defaults the flush timing to false" do
-    flush_hash = { :before => false, :after => false }
+    flush_hash = { before: false, after: false }
     expect(resource.flush_cache).to eq(flush_hash)
   end
 
   it "allows you to set the flush timing with an array" do
-    flush_array = [ :before, :after ]
-    flush_hash = { :before => true, :after => true }
+    flush_array = %i{before after}
+    flush_hash = { before: true, after: true }
     resource.flush_cache(flush_array)
     expect(resource.flush_cache).to eq(flush_hash)
   end
 
   it "allows you to set the flush timing with a hash" do
-    flush_hash = { :before => true, :after => true }
+    flush_hash = { before: true, after: true }
     resource.flush_cache(flush_hash)
     expect(resource.flush_cache).to eq(flush_hash)
   end

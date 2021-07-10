@@ -1,7 +1,7 @@
 #
 # Author:: Joshua Timberman (<joshua@chef.io>)
 # Author:: Tyler Cloke (<tyler@chef.io>)
-# Copyright:: Copyright 2009-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -44,6 +44,25 @@ describe Chef::Resource::Mount do
     expect(resource.device).to eql("/dev/sdb3")
   end
 
+  it "allows you to set mount_point property" do
+    resource.mount_point "U:"
+    expect(resource.mount_point).to eql("U:")
+  end
+
+  it "splits strings passed to the mount_point property" do
+    resource.mount_point "U:"
+    expect(resource.mount_point).to eql("U:")
+  end
+
+  it "strips trailing slashes from mount_point values" do
+    resource.mount_point "//192.168.11.102/Share/backup/"
+    expect(resource.mount_point).to eql("//192.168.11.102/Share/backup")
+  end
+
+  it "raises error when mount_point property is not set" do
+    expect { resource.mount_point nil }.to raise_error(Chef::Exceptions::ValidationFailed, "Property mount_point must be one of: String!  You passed nil.")
+  end
+
   it "sets fsck_device to '-' by default" do
     expect(resource.fsck_device).to eql("-")
   end
@@ -78,12 +97,17 @@ describe Chef::Resource::Mount do
 
   it "allows options to be sent as a string, and convert to array" do
     resource.options "rw,noexec"
-    expect(resource.options).to be_a_kind_of(Array)
+    expect(resource.options).to eql(%w{rw noexec})
+  end
+
+  it "strips whitespace around options in a comma deliminated string" do
+    resource.options "rw, noexec"
+    expect(resource.options).to eql(%w{rw noexec})
   end
 
   it "allows options property as an array" do
     resource.options %w{ro nosuid}
-    expect(resource.options).to be_a_kind_of(Array)
+    expect(resource.options).to eql(%w{ro nosuid})
   end
 
   it "allows options to be sent as a delayed evaluator" do
@@ -93,7 +117,6 @@ describe Chef::Resource::Mount do
 
   it "allows options to be sent as a delayed evaluator, and convert to array" do
     resource.options Chef::DelayedEvaluator.new { "rw,noexec" }
-    expect(resource.options).to be_a_kind_of(Array)
     expect(resource.options).to eql(%w{rw noexec})
   end
 
@@ -134,19 +157,19 @@ describe Chef::Resource::Mount do
   end
 
   it "defaults all feature support to false" do
-    support_hash = { :remount => false }
+    support_hash = { remount: false }
     expect(resource.supports).to eq(support_hash)
   end
 
   it "allows you to set feature support as an array" do
     support_array = [ :remount ]
-    support_hash = { :remount => true }
+    support_hash = { remount: true }
     resource.supports(support_array)
     expect(resource.supports).to eq(support_hash)
   end
 
   it "allows you to set feature support as a hash" do
-    support_hash = { :remount => true }
+    support_hash = { remount: true }
     resource.supports(support_hash)
     expect(resource.supports).to eq(support_hash)
   end

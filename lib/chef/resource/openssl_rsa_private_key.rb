@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2009-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,59 +15,79 @@
 # limitations under the License.
 #
 
-require "chef/resource"
+require_relative "../resource"
 
 class Chef
   class Resource
     class OpensslRsaPrivateKey < Chef::Resource
-      require "chef/mixin/openssl_helper"
+      require_relative "../mixin/openssl_helper"
       include Chef::Mixin::OpenSSLHelper
 
-      resource_name :openssl_rsa_private_key
+      unified_mode true
+
       provides(:openssl_rsa_private_key) { true }
       provides(:openssl_rsa_key) { true } # legacy cookbook resource name
 
-      description "Use the openssl_rsa_private_key resource to generate RSA private key files."\
-                  " If a valid RSA key file can be opened at the specified location, no new file"\
-                  " will be created. If the RSA key file cannot be opened, either because it does"\
-                  " not exist or because the password to the RSA key file does not match the"\
-                  " password in the recipe, it will be overwritten."
+      description "Use the **openssl_rsa_private_key** resource to generate RSA private key files. If a valid RSA key file can be opened at the specified location, no new file will be created. If the RSA key file cannot be opened, either because it does not exist or because the password to the RSA key file does not match the password in the recipe, it will be overwritten."
       introduced "14.0"
+      examples <<~DOC
+        Generate new 2048bit key with the default des3 cipher
+
+        ```ruby
+        openssl_rsa_private_key '/etc/ssl_files/rsakey_des3.pem' do
+          key_length 2048
+          action :create
+        end
+        ```
+
+        Generate new 1024bit key with the aes-128-cbc cipher
+
+        ```ruby
+        openssl_rsa_private_key '/etc/ssl_files/rsakey_aes128cbc.pem' do
+          key_length 1024
+          key_cipher 'aes-128-cbc'
+          action :create
+        end
+        ```
+      DOC
 
       property :path, String,
-               description: "The path to write the file to it's different than the resource name.",
-               name_property: true
+        description: "An optional property for specifying the path to write the file to if it differs from the resource block's name.",
+        name_property: true
 
       property :key_length, Integer,
-               equal_to: [1024, 2048, 4096, 8192],
-               validation_message: "key_length (bits) must be 1024, 2048, 4096, or 8192.",
-               description: "The desired bit length of the generated key.",
-               default: 2048
+        equal_to: [1024, 2048, 4096, 8192],
+        validation_message: "key_length (bits) must be 1024, 2048, 4096, or 8192!",
+        description: "The desired bit length of the generated key.",
+        default: 2048
 
       property :key_pass, String,
-               description: "The desired passphrase for the key."
+        description: "The desired passphrase for the key."
 
       property :key_cipher, String,
-               equal_to: OpenSSL::Cipher.ciphers,
-               validation_message: "key_cipher must be a cipher known to openssl. Run `openssl list-cipher-algorithms` to see available options.",
-               description: "The designed cipher to use when generating your key. Run `openssl list-cipher-algorithms` to see available options.",
-               default: "des3"
+        description: "The designed cipher to use when generating your key. Run `openssl list-cipher-algorithms` to see available options.",
+        default: lazy { "des3" },
+        default_description: "des3",
+        callbacks: {
+          "key_cipher must be a cipher known to openssl. Run `openssl list-cipher-algorithms` to see available options." =>
+            proc { |v| OpenSSL::Cipher.ciphers.include?(v) },
+        }
 
-      property :owner, [String, nil],
-               description: "The owner of all files created by the resource."
+      property :owner, [String, Integer],
+        description: "The owner applied to all files created by the resource."
 
-      property :group, [String, nil],
-               description: "The group of all files created by the resource."
+      property :group, [String, Integer],
+        description: "The group ownership applied to all files created by the resource."
 
       property :mode, [Integer, String],
-               description: "The permission mode of all files created by the resource.",
-               default: "0600"
+        description: "The permission mode applied to all files created by the resource.",
+        default: "0600"
 
       property :force, [TrueClass, FalseClass],
-               description: "Force creating the key even if the existing key exists.",
-               default: false, desired_state: false
+        description: "Force creation of the key even if the same key already exists on the node.",
+        default: false, desired_state: false
 
-      action :create do
+      action :create, description: "Create the RSA private key file." do
         return if new_resource.force || priv_key_file_valid?(new_resource.path, new_resource.key_pass)
 
         converge_by("create #{new_resource.key_length} bit RSA key #{new_resource.path}") do
@@ -78,7 +98,7 @@ class Chef
             rsa_key_content = gen_rsa_priv_key(new_resource.key_length).to_pem
           end
 
-          declare_resource(:file, new_resource.path) do
+          file new_resource.path do
             action :create
             owner new_resource.owner unless new_resource.owner.nil?
             group new_resource.group unless new_resource.group.nil?

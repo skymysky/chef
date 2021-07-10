@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Tyler Cloke (<tyler@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -78,7 +78,7 @@ describe Chef::Resource::RemoteFile do
       expect(resource.source).to eql(["file:///C:/foo bar"])
     end
 
-    it "accepts a delayed evalutator (string) for the remote file source" do
+    it "accepts a delayed evaluator (string) for the remote file source" do
       resource.source Chef::DelayedEvaluator.new { "http://opscode.com/" }
       expect(resource.source).to eql([ "http://opscode.com/" ])
     end
@@ -165,7 +165,7 @@ describe Chef::Resource::RemoteFile do
       expect(resource.use_last_modified).to be_truthy
     end
 
-    it "disables etags indivdually" do
+    it "disables etags individually" do
       resource.use_etags(false)
       expect(resource.use_etags).to be_falsey
       expect(resource.use_last_modified).to be_truthy
@@ -181,7 +181,7 @@ describe Chef::Resource::RemoteFile do
 
   describe "when it has group, mode, owner, source, and checksum" do
     before do
-      if Chef::Platform.windows?
+      if ChefUtils.windows?
         resource.path("C:/temp/origin/file.txt")
         resource.rights(:read, "Everyone")
         resource.deny_rights(:full_control, "Clumsy_Sam")
@@ -197,10 +197,10 @@ describe Chef::Resource::RemoteFile do
 
     it "describes its state" do
       state = resource.state_for_resource_reporter
-      if Chef::Platform.windows?
+      if ChefUtils.windows?
         puts state
-        expect(state[:rights]).to eq([{ :permissions => :read, :principals => "Everyone" }])
-        expect(state[:deny_rights]).to eq([{ :permissions => :full_control, :principals => "Clumsy_Sam" }])
+        expect(state[:rights]).to eq([{ permissions: :read, principals: "Everyone" }])
+        expect(state[:deny_rights]).to eq([{ permissions: :full_control, principals: "Clumsy_Sam" }])
       else
         expect(state[:group]).to eq("pokemon")
         expect(state[:mode]).to eq("0664")
@@ -210,7 +210,7 @@ describe Chef::Resource::RemoteFile do
     end
 
     it "returns the path as its identity" do
-      if Chef::Platform.windows?
+      if ChefUtils.windows?
         expect(resource.identity).to eq("C:/temp/origin/file.txt")
       else
         expect(resource.identity).to eq("/this/path/")

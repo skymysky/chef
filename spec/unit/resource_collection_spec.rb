@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Christopher Walters (<cw@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@
 require "spec_helper"
 
 describe Chef::ResourceCollection do
-  let(:rc) { Chef::ResourceCollection.new() }
+  let(:rc) { Chef::ResourceCollection.new }
   let(:resource) { Chef::Resource::ZenMaster.new("makoto") }
 
   it "should throw an error when calling a non-delegated method" do
@@ -65,7 +65,7 @@ describe Chef::ResourceCollection do
     end
 
     it "should accept named arguments in any order" do
-      rc.insert(resource, :instance_name => "foo", :resource_type => "bar")
+      rc.insert(resource, instance_name: "foo", resource_type: "bar")
       expect(rc[0]).to eq(resource)
     end
 
@@ -97,7 +97,7 @@ describe Chef::ResourceCollection do
   describe "each" do
     it "should allow you to iterate over every resource in the collection" do
       load_up_resources
-      results = Array.new
+      results = []
       expect do
         rc.each do |r|
           results << r.name
@@ -119,7 +119,7 @@ describe Chef::ResourceCollection do
   describe "each_index" do
     it "should allow you to iterate over every resource by index" do
       load_up_resources
-      results = Array.new
+      results = []
       expect do
         rc.each_index do |i|
           results << rc[i].name
@@ -183,6 +183,14 @@ describe Chef::ResourceCollection do
       expect(rc).to be_empty
     end
 
+    it "should allow to delete resources with different providers" do
+      pkg = Chef::Resource::YumPackage.new("monkey")
+      rc.insert(pkg, instance_name: "monkey", resource_type: "package")
+      expect(rc).not_to be_empty
+      expect(rc.delete("package[monkey]")).to eql(pkg)
+      expect(rc).to be_empty
+    end
+
     it "should raise an exception if you send something strange to delete" do
       expect { rc.delete(:symbol) }.to raise_error(ArgumentError)
     end
@@ -196,19 +204,19 @@ describe Chef::ResourceCollection do
 
     it "should find a resource by symbol and name (:zen_master => monkey)" do
       load_up_resources
-      expect(rc.resources(:zen_master => "monkey").name).to eql("monkey")
+      expect(rc.resources(zen_master: "monkey").name).to eql("monkey")
     end
 
     it "should find a resource by symbol and array of names (:zen_master => [a,b])" do
       load_up_resources
-      results = rc.resources(:zen_master => %w{monkey dog})
+      results = rc.resources(zen_master: %w{monkey dog})
       expect(results.length).to eql(2)
       check_by_names(results, "monkey", "dog")
     end
 
     it "should find resources of multiple kinds (:zen_master => a, :file => b)" do
       load_up_resources
-      results = rc.resources(:zen_master => "monkey", :file => "something")
+      results = rc.resources(zen_master: "monkey", file: "something")
       expect(results.length).to eql(2)
       check_by_names(results, "monkey", "something")
     end
@@ -238,7 +246,7 @@ describe Chef::ResourceCollection do
     end
 
     it "should raise an exception if you pass something other than a string or hash to resource" do
-      expect { rc.resources([Array.new]) }.to raise_error(ArgumentError)
+      expect { rc.resources([[]]) }.to raise_error(ArgumentError)
     end
 
     it "raises an error when attempting to find a resource that does not exist" do
@@ -253,7 +261,7 @@ describe Chef::ResourceCollection do
     end
 
     it "accepts a single-element :resource_type => 'resource_name' Hash" do
-      expect(rc.validate_lookup_spec!(:service => "apache2")).to be_truthy
+      expect(rc.validate_lookup_spec!(service: "apache2")).to be_truthy
     end
 
     it "accepts a chef resource object" do

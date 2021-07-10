@@ -1,6 +1,6 @@
 #--
 # Author:: Lamont Granquist <lamont@chef.io>
-# Copyright:: Copyright 2010-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,35 +15,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+require "chef-utils/dsl/which" unless defined?(ChefUtils::DSL::Which)
+require "chef-utils/dsl/default_paths" unless defined?(ChefUtils::DSL::DefaultPaths)
+require_relative "chef_utils_wiring" unless defined?(Chef::Mixin::ChefUtilsWiring)
+
 class Chef
   module Mixin
     module Which
-      def which(*cmds, extra_path: nil, &block)
-        where(*cmds, extra_path: extra_path, &block).first || false
-      end
-
-      def where(*cmds, extra_path: nil, &block)
-        # NOTE: unnecessarily duplicates function of path_sanity
-        extra_path ||= [ "/bin", "/usr/bin", "/sbin", "/usr/sbin" ]
-        paths = env_path.split(File::PATH_SEPARATOR) + Array(extra_path)
-        cmds.map do |cmd|
-          paths.map do |path|
-            filename = Chef.path_to(File.join(path, cmd))
-            filename if valid_executable?(filename, &block)
-          end.compact
-        end.flatten
-      end
+      include ChefUtils::DSL::Which
+      include ChefUtils::DSL::DefaultPaths
+      include ChefUtilsWiring
 
       private
 
-      # for test stubbing
-      def env_path
-        ENV["PATH"]
-      end
-
-      def valid_executable?(filename, &block)
-        return false unless File.executable?(filename) && !File.directory?(filename)
-        block ? yield(filename) : true
+      # we dep-inject default paths into this API for historical reasons
+      #
+      # @api private
+      def __extra_path
+        __default_paths
       end
     end
   end

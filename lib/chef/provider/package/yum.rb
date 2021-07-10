@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2016-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,15 +15,15 @@
 # limitations under the License.
 #
 
-require "chef/provider/package"
-require "chef/resource/yum_package"
-require "chef/mixin/which"
-require "chef/mixin/shell_out"
-require "chef/mixin/get_source_from_package"
-require "chef/provider/package/yum/python_helper"
-require "chef/provider/package/yum/version"
+require_relative "../package"
+require_relative "../../resource/yum_package"
+require_relative "../../mixin/which"
+require_relative "../../mixin/shell_out"
+require_relative "../../mixin/get_source_from_package"
+require_relative "yum/python_helper"
+require_relative "yum/version"
 # the stubs in the YumCache class are still an external API
-require "chef/provider/package/yum/yum_cache"
+require_relative "yum/yum_cache"
 
 class Chef
   class Provider
@@ -37,7 +37,7 @@ class Chef
         use_multipackage_api
         use_package_name_for_source
 
-        provides :package, platform_family: %w{fedora amazon rhel}
+        provides :package, platform_family: "fedora_derived"
 
         provides :yum_package
 
@@ -93,16 +93,14 @@ class Chef
             next if n.nil?
 
             av = available_version(i)
-
             name = av.name # resolve the name via the available/candidate version
-
-            iv = python_helper.package_query(:whatinstalled, name)
+            iv = python_helper.package_query(:whatinstalled, av.name_with_arch, options: options)
 
             method = "install"
 
             # If this is a package like the kernel that can be installed multiple times, we'll skip over this logic
             if new_resource.allow_downgrade && version_gt?(iv.version_with_arch, av.version_with_arch) && !python_helper.install_only_packages(name)
-              # We allow downgrading only in the evenit of single-package
+              # We allow downgrading only in the event of single-package
               # rules where the user explicitly allowed it
               method = "downgrade"
             end
@@ -117,10 +115,10 @@ class Chef
           end
 
           if new_resource.source
-            yum(options, "-y #{method}", new_resource.source)
+            yum(options, "-y", method, new_resource.source)
           else
             resolved_names = names.each_with_index.map { |name, i| available_version(i).to_s unless name.nil? }
-            yum(options, "-y #{method}", resolved_names)
+            yum(options, "-y", method, resolved_names)
           end
           flushcache
         end
@@ -130,7 +128,7 @@ class Chef
 
         def remove_package(names, versions)
           resolved_names = names.each_with_index.map { |name, i| installed_version(i).to_s unless name.nil? }
-          yum(options, "-y remove", resolved_names)
+          yum(options, "-y", "remove", resolved_names)
           flushcache
         end
 
@@ -143,14 +141,14 @@ class Chef
         # NB: the yum_package provider manages individual single packages, please do not submit issues or PRs to try to add wildcard
         # support to lock / unlock.  The best solution is to write an execute resource which does a not_if `yum versionlock | grep '^pattern`` kind of approach
         def lock_package(names, versions)
-          yum("-d0 -e0 -y", options, "versionlock add", resolved_package_lock_names(names))
+          yum("-d0", "-e0", "-y", options, "versionlock", "add", resolved_package_lock_names(names))
         end
 
         # NB: the yum_package provider manages individual single packages, please do not submit issues or PRs to try to add wildcard
         # support to lock / unlock.  The best solution is to write an execute resource which does a only_if `yum versionlock | grep '^pattern`` kind of approach
         def unlock_package(names, versions)
           # yum versionlock delete on rhel6 needs the glob nonsense in the following command
-          yum("-d0 -e0 -y", options, "versionlock delete", resolved_package_lock_names(names).map { |n| "'*:#{n}-*'" })
+          yum("-d0", "-e0", "-y", options, "versionlock", "delete", resolved_package_lock_names(names).map { |n| "*:#{n}-*" })
         end
 
         private
@@ -158,7 +156,7 @@ class Chef
         # this will resolve things like `/usr/bin/perl` or virtual packages like `mysql` -- it will not work (well? at all?) with globs that match multiple packages
         def resolved_package_lock_names(names)
           names.each_with_index.map do |name, i|
-            if !name.nil?
+            unless name.nil?
               if installed_version(i).version.nil?
                 available_version(i).name
               else
@@ -171,7 +169,7 @@ class Chef
         def locked_packages
           @locked_packages ||=
             begin
-              locked = shell_out_with_timeout!("yum versionlock list")
+              locked = yum("versionlock", "list")
               locked.stdout.each_line.map do |line|
                 line.sub(/-[^-]*-[^-]*$/, "").split(":").last.strip
               end
@@ -188,39 +186,34 @@ class Chef
 
         def version_gt?(v1, v2)
           return false if v1.nil? || v2.nil?
+
           python_helper.compare_versions(v1, v2) == 1
         end
 
         def version_equals?(v1, v2)
           return false if v1.nil? || v2.nil?
+
           python_helper.compare_versions(v1, v2) == 0
         end
 
         def version_compare(v1, v2)
           return false if v1.nil? || v2.nil?
+
           python_helper.compare_versions(v1, v2)
         end
 
-        # Generate the yum syntax for the package
-        def yum_syntax(name, version, arch)
-          s = name
-          s += "-#{version}" if version
-          s += ".#{arch}" if arch
-          s
-        end
-
         def resolve_source_to_version_obj
-          shell_out_with_timeout!("rpm -qp --queryformat '%{NAME} %{EPOCH} %{VERSION} %{RELEASE} %{ARCH}\n' #{new_resource.source}").stdout.each_line do |line|
+          shell_out!("rpm -qp --queryformat '%{NAME} %{EPOCH} %{VERSION} %{RELEASE} %{ARCH}\n' #{new_resource.source}").stdout.each_line do |line|
             # this is another case of committing the sin of doing some lightweight mangling of RPM versions in ruby -- but the output of the rpm command
             # does not match what the yum library accepts.
             case line
               when /^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/
-                return Version.new($1, "#{$2 == '(none)' ? '0' : $2}:#{$3}-#{$4}", $5)
+                return Version.new($1, "#{$2 == "(none)" ? "0" : $2}:#{$3}-#{$4}", $5)
             end
           end
         end
 
-        # @returns Array<Version>
+        # @return Array<Version>
         def available_version(index)
           @available_version ||= []
 
@@ -233,22 +226,19 @@ class Chef
           @available_version[index]
         end
 
-        # @returns Array<Version>
+        # @return Array<Version>
         def installed_version(index)
           @installed_version ||= []
           @installed_version[index] ||= if new_resource.source
-                                          python_helper.package_query(:whatinstalled, available_version(index).name, version: safe_version_array[index], arch: safe_arch_array[index])
+                                          python_helper.package_query(:whatinstalled, available_version(index).name, arch: safe_arch_array[index], options: options)
                                         else
-                                          python_helper.package_query(:whatinstalled, package_name_array[index], version: safe_version_array[index], arch: safe_arch_array[index])
+                                          python_helper.package_query(:whatinstalled, package_name_array[index], arch: safe_arch_array[index], options: options)
                                         end
           @installed_version[index]
         end
 
-        # cache flushing is accomplished by simply restarting the python helper.  this produces a roughly
-        # 15% hit to the runtime of installing/removing/upgrading packages.  correctly using multipackage
-        # array installs (and the multipackage cookbook) can produce 600% improvements in runtime.
         def flushcache
-          python_helper.restart
+          python_helper.close_rpmdb
         end
 
         def yum_binary
@@ -260,7 +250,7 @@ class Chef
         end
 
         def yum(*args)
-          shell_out_with_timeout!(a_to_s(yum_binary, *args))
+          shell_out!(yum_binary, *args)
         end
 
         def safe_version_array

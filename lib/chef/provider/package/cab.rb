@@ -1,6 +1,6 @@
 #
 # Author:: Vasundhara Jagdale (<vasundhara.jagdale@msystechnologies.com>)
-# Copyright:: Copyright 2015-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +16,12 @@
 # limitations under the License.
 #
 
-require "chef/provider/package"
-require "chef/resource/cab_package"
-require "chef/mixin/shell_out"
-require "chef/mixin/uris"
-require "chef/mixin/checksum"
+require_relative "../package"
+require_relative "../../resource/cab_package"
+require_relative "../../mixin/shell_out"
+require_relative "../../mixin/uris"
+require_relative "../../mixin/checksum"
+require "cgi" unless defined?(CGI)
 
 class Chef
   class Provider
@@ -45,13 +46,11 @@ class Chef
         end
 
         def download_source_file
-          source_resource.run_action(:create)
-          logger.trace("#{new_resource} fetched source file to #{source_resource.path}")
           source_resource.path
         end
 
         def source_resource
-          @source_resource ||= declare_resource(:remote_file, new_resource.name) do
+          declare_resource(:remote_file, new_resource.name) do
             path default_download_cache_path
             source new_resource.source
             backup false
@@ -60,7 +59,7 @@ class Chef
 
         def default_download_cache_path
           uri = ::URI.parse(new_resource.source)
-          filename = ::File.basename(::URI.unescape(uri.path))
+          filename = ::File.basename(::CGI.unescape(uri.path))
           file_cache_dir = Chef::FileCache.create_cache_path("package/")
           Chef::Util::PathHelper.cleanpath("#{file_cache_dir}/#{filename}")
         end
@@ -74,9 +73,14 @@ class Chef
         end
 
         def dism_command(command)
-          shellout = Mixlib::ShellOut.new("dism.exe /Online /English #{command} /NoRestart", timeout: new_resource.timeout)
           with_os_architecture(nil) do
-            shellout.run_command
+            result = shell_out("dism.exe /Online /English #{command} /NoRestart", timeout: new_resource.timeout)
+            if result.exitstatus == -2146498530
+              raise Chef::Exceptions::Package, "The specified package is not applicable to this image." if result.stdout.include?("0x800f081e")
+
+              result.error!
+            end
+            result
           end
         end
 
@@ -84,12 +88,12 @@ class Chef
           # e.g. Package_for_KB2975719~31bf3856ad364e35~amd64~~6.3.1.8
           package = new_cab_identity
           # Search for just the package name to catch a different version being installed
-          logger.trace("#{new_resource} searching for installed package #{package['name']}")
+          logger.trace("#{new_resource} searching for installed package #{package["name"]}")
           existing_package_identities = installed_packages.map do |p|
             split_package_identity(p["package_identity"])
           end
           found_packages = existing_package_identities.select do |existing_package_ident|
-            existing_package_ident["name"] == package["name"]
+            existing_package_ident["version"] == package["version"].chomp && existing_package_ident["name"] == package["name"]
           end
           if found_packages.empty?
             nil
@@ -97,7 +101,7 @@ class Chef
             found_packages.first["version"]
           else
             # Presuming this won't happen, otherwise we need to handle it
-            raise Chef::Exceptions::Package, "Found multiple packages installed matching name #{package['name']}, found: #{found_packages.length} matches"
+            raise Chef::Exceptions::Package, "Found multiple packages installed matching name #{package["name"]}, found: #{found_packages.length} matches"
           end
         end
 
@@ -123,6 +127,7 @@ class Chef
           text.each_line do |line|
             key, value = line.split(":") if line.start_with?("Package Identity")
             next if key.nil? || value.nil?
+
             package = {}
             package[key.downcase.strip.tr(" ", "_")] = value.strip.chomp
             packages << package

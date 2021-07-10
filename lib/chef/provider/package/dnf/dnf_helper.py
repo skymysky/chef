@@ -14,8 +14,34 @@ def get_sack():
     global base
     if base is None:
         base = dnf.Base()
+        conf = base.conf
+        conf.read()
+        conf.installroot = '/'
+        conf.assumeyes = True
+        subst = conf.substitutions
+        subst.update_from_etc(conf.installroot)
+        try:
+            base.init_plugins()
+            base.pre_configure_plugins()
+        except AttributeError:
+            pass
         base.read_all_repos()
-        base.fill_sack()
+        repos = base.repos
+
+        if 'repos' in command:
+            for repo_pattern in command['repos']:
+                if 'enable' in repo_pattern:
+                    for repo in repos.get_matching(repo_pattern['enable']):
+                        repo.enable()
+                if 'disable' in repo_pattern:
+                    for repo in repos.get_matching(repo_pattern['disable']):
+                        repo.disable()
+
+        try:
+            base.configure_plugins()
+        except AttributeError:
+            pass
+        base.fill_sack(load_system_repo='auto')
     return base.sack
 
 # FIXME: leaks memory and does not work
@@ -26,13 +52,38 @@ def flushcache():
         pass
     get_sack().load_system_repo(build_cache=True)
 
+def version_tuple(versionstr):
+    e = '0'
+    v = None
+    r = None
+    colon_index = versionstr.find(':')
+    if colon_index > 0:
+        e = str(versionstr[:colon_index])
+    dash_index = versionstr.find('-')
+    if dash_index > 0:
+        tmp = versionstr[colon_index + 1:dash_index]
+        if tmp != '':
+            v = tmp
+        arch_index = versionstr.rfind('.', dash_index)
+        if arch_index > 0:
+            r = versionstr[dash_index + 1:arch_index]
+        else:
+            r = versionstr[dash_index + 1:]
+    else:
+        tmp = versionstr[colon_index + 1:]
+        if tmp != '':
+            v = tmp
+    return (e, v, r)
+
 def versioncompare(versions):
     sack = get_sack()
     if (versions[0] is None) or (versions[1] is None):
-      sys.stdout.write('0\n')
+        outpipe.write('0\n')
+        outpipe.flush()
     else:
-      evr_comparison = sack.evr_cmp(versions[0], versions[1])
-      sys.stdout.write('{}\n'.format(evr_comparison))
+        evr_comparison = dnf.rpm.rpm.labelCompare(version_tuple(versions[0]), version_tuple(versions[1]))
+        outpipe.write('{}\n'.format(evr_comparison))
+        outpipe.flush()
 
 def query(command):
     sack = get_sack()
@@ -47,14 +98,27 @@ def query(command):
         q = q.available()
 
     if 'epoch' in command:
-        q = q.filterm(epoch=int(command['epoch']))
+        # We assume that any glob is "*" so just omit the filter since the dnf libraries have no
+        # epoch__glob filter.  That means "?" wildcards in epochs will fail.  The workaround is to
+        # not use the version filter here but to put the version with all the globs in the package name.
+        if not dnf.util.is_glob_pattern(command['epoch']):
+            q = q.filterm(epoch=int(command['epoch']))
     if 'version' in command:
-        q = q.filterm(version__glob=command['version'])
+        if dnf.util.is_glob_pattern(command['version']):
+            q = q.filterm(version__glob=command['version'])
+        else:
+            q = q.filterm(version=command['version'])
     if 'release' in command:
-        q = q.filterm(release__glob=command['release'])
+        if dnf.util.is_glob_pattern(command['release']):
+            q = q.filterm(release__glob=command['release'])
+        else:
+            q = q.filterm(release=command['release'])
 
     if 'arch' in command:
-        q = q.filterm(arch__glob=command['arch'])
+        if dnf.util.is_glob_pattern(command['arch']):
+            q = q.filterm(arch__glob=command['arch'])
+        else:
+            q = q.filterm(arch=command['arch'])
 
     # only apply the default arch query filter if it returns something
     archq = q.filter(arch=[ 'noarch', hawkey.detect_arch() ])
@@ -64,37 +128,64 @@ def query(command):
     pkgs = q.latest(1).run()
 
     if not pkgs:
-        sys.stdout.write('{} nil nil\n'.format(command['provides'].split().pop(0)))
+        outpipe.write('{} nil nil\n'.format(command['provides'].split().pop(0)))
+        outpipe.flush()
     else:
         # make sure we picked the package with the highest version
         pkgs.sort
         pkg = pkgs.pop()
-        sys.stdout.write('{} {}:{}-{} {}\n'.format(pkg.name, pkg.epoch, pkg.version, pkg.release, pkg.arch))
+        outpipe.write('{} {}:{}-{} {}\n'.format(pkg.name, pkg.epoch, pkg.version, pkg.release, pkg.arch))
+        outpipe.flush()
 
 # the design of this helper is that it should try to be 'brittle' and fail hard and exit in order
 # to keep process tables clean.  additional error handling should probably be added to the retry loop
 # on the ruby side.
 def exit_handler(signal, frame):
+    if base is not None:
+        base.close()
     sys.exit(0)
 
-signal.signal(signal.SIGINT, exit_handler)
-signal.signal(signal.SIGHUP, exit_handler)
-signal.signal(signal.SIGPIPE, exit_handler)
+def setup_exit_handler():
+    signal.signal(signal.SIGINT, exit_handler)
+    signal.signal(signal.SIGHUP, exit_handler)
+    signal.signal(signal.SIGPIPE, exit_handler)
+    signal.signal(signal.SIGQUIT, exit_handler)
 
-while 1:
-    # kill self if we get orphaned (tragic)
-    ppid = os.getppid()
-    if ppid == 1:
-        sys.exit(0)
-    line = sys.stdin.readline()
-    command = json.loads(line)
-    if command['action'] == "whatinstalled":
-        query(command)
-    elif command['action'] == "whatavailable":
-        query(command)
-    elif command['action'] == "flushcache":
-        flushcache()
-    elif command['action'] == "versioncompare":
-        versioncompare(command['versions'])
-    else:
-        raise RuntimeError("bad command")
+if len(sys.argv) < 3:
+    inpipe = sys.stdin
+    outpipe = sys.stdout
+else:
+    os.set_blocking(int(sys.argv[1]), True)
+    inpipe = os.fdopen(int(sys.argv[1]), "r")
+    outpipe = os.fdopen(int(sys.argv[2]), "w")
+
+try:
+    setup_exit_handler()
+    while 1:
+        # stop the process if the parent proc goes away
+        ppid = os.getppid()
+        if ppid == 1:
+            raise RuntimeError("orphaned")
+
+        line = inpipe.readline()
+
+        # only way to detect EOF in python
+        if line == "":
+            break
+
+        try:
+            command = json.loads(line)
+        except ValueError:
+            raise RuntimeError("bad json parse")
+
+        if command['action'] == "whatinstalled":
+            query(command)
+        elif command['action'] == "whatavailable":
+            query(command)
+        elif command['action'] == "versioncompare":
+            versioncompare(command['versions'])
+        else:
+            raise RuntimeError("bad command")
+finally:
+    if base is not None:
+        base.close()

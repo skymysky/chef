@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Tyler Cloke (<tyler@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,19 +17,21 @@
 # limitations under the License.
 #
 
-require "chef/resource/execute"
+require_relative "execute"
 
 class Chef
   class Resource
     class Script < Chef::Resource::Execute
-      resource_name :script
+      unified_mode true
+
+      provides :script
 
       identity_attr :name
 
-      description "Use the script resource to execute scripts using a specified interpreter, such as Bash, csh, Perl, Python, or Ruby."\
-                  " This resource may also use any of the actions and properties that are available to the execute resource. Commands"\
+      description "Use the **script** resource to execute scripts using a specified interpreter, such as Bash, csh, Perl, Python, or Ruby."\
+                  " This resource may also use any of the actions and properties that are available to the **execute** resource. Commands"\
                   " that are executed with this resource are (by their nature) not idempotent, as they are typically unique to the"\
-                  " environment in which they are run. Use not_if and only_if to guard this resource for idempotence."
+                  " environment in which they are run. Use `not_if` and `only_if` to guard this resource for idempotence."
 
       def initialize(name, run_context = nil)
         super
@@ -39,16 +41,19 @@ class Chef
 
       # FIXME: remove this and use an execute sub-resource instead of inheriting from Execute
       def command(arg = nil)
-        unless arg.nil?
-          raise Chef::Exceptions::Script, "Do not use the command attribute on a #{resource_name} resource, use the 'code' attribute instead."
-        end
         super
+        unless arg.nil?
+          raise Chef::Exceptions::Script, "Do not use the command property on a #{resource_name} resource, use the 'code' property instead."
+        end
       end
 
-      property :code, String, required: true
-      property :interpreter, String
-      property :flags, String
+      property :code, String, required: true,
+        description: "A quoted string of code to be executed."
 
+      property :interpreter, String
+
+      property :flags, String,
+        description: "One or more command line flags that are passed to the interpreter when a command is invoked."
     end
   end
 end

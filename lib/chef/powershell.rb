@@ -1,6 +1,6 @@
 #
 # Author:: Stuart Preston (<stuart@chef.io>)
-# Copyright:: Copyright 2018, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,41 +15,65 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "chef/json_compat"
-require "win32ole" if RUBY_PLATFORM =~ /mswin|mingw32|windows/
+require "ffi" unless defined?(FFI)
+require_relative "json_compat"
 
 class Chef
   class PowerShell
+    extend FFI::Library
 
     attr_reader :result
     attr_reader :errors
+    attr_reader :verbose
 
-    # Run a command under PowerShell via a managed (.NET) COM interop API.
-    # This implementation requires the managed dll to be registered on the
-    # target machine.
+    # Run a command under PowerShell via FFI
+    # This implementation requires the managed dll and native wrapper to be in the library search
+    # path on Windows (i.e. c:\windows\system32 or in the same location as ruby.exe).
     #
     # Requires: .NET Framework 4.0 or higher on the target machine.
     #
     # @param script [String] script to run
     # @return [Object] output
     def initialize(script)
-      raise "Chef::PowerShell can only be used on the Windows platform." unless RUBY_PLATFORM =~ /mswin|mingw32|windows/
+      # This Powershell DLL source lives here: https://github.com/chef/chef-powershell-shim
+      # Every merge into that repo triggers a Habitat build and promotion. Running
+      # the rake :update_chef_exec_dll task in this (chef/chef) repo will pull down
+      # the built packages and copy the binaries to distro/ruby_bin_folder. Bundle install
+      # ensures that the correct architecture binaries are installed into the path.
+      @dll ||= "Chef.PowerShell.Wrapper.dll"
       exec(script)
     end
 
+    #
+    # Was there an error running the command
+    #
+    # @return [Boolean]
+    #
     def error?
       return true if errors.count > 0
+
       false
     end
 
-    private
+    class CommandFailed < RuntimeError; end
+
+    #
+    # @raise [Chef::PowerShell::CommandFailed] raise if the command failed
+    #
+    def error!
+      raise Chef::PowerShell::CommandFailed, "Unexpected exit in PowerShell command: #{@errors}" if error?
+    end
+
+    protected
 
     def exec(script)
-      ps = WIN32OLE.new("Chef.PowerShell")
-      outcome = ps.ExecuteScript(script)
-      hashed_outcome = Chef::JSONCompat.parse(outcome)
+      FFI.ffi_lib @dll
+      FFI.attach_function :execute_powershell, :ExecuteScript, [:string], :pointer
+      execution = FFI.execute_powershell(script).read_utf16string
+      hashed_outcome = Chef::JSONCompat.parse(execution)
       @result = Chef::JSONCompat.parse(hashed_outcome["result"])
       @errors = hashed_outcome["errors"]
+      @verbose = hashed_outcome["verbose"]
     end
   end
 end

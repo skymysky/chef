@@ -1,7 +1,7 @@
 #
 # Author:: Doug MacEachern <dougm@vmware.com>
 # Copyright:: 2010-2018, VMware, Inc.
-# Copyright:: 2017-2018, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,41 +16,52 @@
 # limitations under the License.
 #
 
-require "chef/resource"
+require_relative "../resource"
 
 class Chef
   class Resource
     class WindowsShortcut < Chef::Resource
-      resource_name :windows_shortcut
+      unified_mode true
+
       provides(:windows_shortcut) { true }
 
-      description "Use the windows_shortcut resource to create shortcut files on Windows"
+      description "Use the **windows_shortcut** resource to create shortcut files on Windows."
       introduced "14.0"
+      examples <<~DOC
+      **Create a shortcut with a description**:
+
+      ```ruby
+      windows_shortcut 'C:\\shortcut_dir.lnk' do
+        target 'C:\\original_dir'
+        description 'Make a shortcut to C:\\original_dir'
+      end
+      ```
+      DOC
 
       property :shortcut_name, String,
-               description: "The name for the shortcut if it differs from the resource name.",
-               name_property: true
+        description: "An optional property to set the shortcut name if it differs from the resource block's name.",
+        name_property: true
 
       property :target, String,
-               description: "Where the shortcut links to."
+        description: "The destination that the shortcut links to."
 
       property :arguments, String,
-               description: "Arguments to pass to the target when the shortcut is executed."
+        description: "Arguments to pass to the target when the shortcut is executed."
 
       property :description, String,
-               description: "The description of the shortcut"
+        description: "The description of the shortcut"
 
       property :cwd, String,
-               description: "Working directory to use when the target is executed."
+        description: "Working directory to use when the target is executed."
 
       property :iconlocation, String,
-               description: "Icon to use for the shortcut, in the format of 'path, index'. Index is the icon file to use. See https://msdn.microsoft.com/en-us/library/3s9bx7at.aspx for details"
+        description: "Icon to use for the shortcut. Accepts the format of `path, index`, where index is the icon file to use. See Microsoft's [documentation](https://msdn.microsoft.com/en-us/library/3s9bx7at.aspx) for details"
 
-      load_current_value do |desired|
-        require "win32ole" if RUBY_PLATFORM =~ /mswin|mingw32|windows/
+      load_current_value do |new_resource|
+        require "win32ole" if RUBY_PLATFORM.match?(/mswin|mingw32|windows/)
 
-        link = WIN32OLE.new("WScript.Shell").CreateShortcut(desired.shortcut_name)
-        name desired.shortcut_name
+        link = WIN32OLE.new("WScript.Shell").CreateShortcut(new_resource.shortcut_name)
+        name new_resource.shortcut_name
         target(link.TargetPath)
         arguments(link.Arguments)
         description(link.Description)
@@ -58,9 +69,7 @@ class Chef
         iconlocation(link.IconLocation)
       end
 
-      action :create do
-        description "Create or modify a Windows shortcut."
-
+      action :create, description: "Create or modify a Windows shortcut." do
         converge_if_changed do
           converge_by "creating shortcut #{new_resource.shortcut_name}" do
             link = WIN32OLE.new("WScript.Shell").CreateShortcut(new_resource.shortcut_name)

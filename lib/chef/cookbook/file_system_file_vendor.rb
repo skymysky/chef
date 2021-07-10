@@ -1,7 +1,6 @@
-#--
 # Author:: Christopher Walters (<cw@chef.io>)
 # Author:: Tim Hinderliter (<tim@chef.io>)
-# Copyright:: Copyright 2010-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +16,7 @@
 # limitations under the License.
 #
 
-require "chef/cookbook/file_vendor"
+require_relative "file_vendor"
 
 class Chef
   class Cookbook
@@ -28,7 +27,7 @@ class Chef
     # and throws the rest away then re-builds the list of files on the
     # disk. This is due to the manifest not having the on-disk file
     # locations, since in the chef-client case, that information is
-    # non-sensical.
+    # nonsensical.
     class FileSystemFileVendor < FileVendor
 
       attr_reader :cookbook_name
@@ -48,8 +47,9 @@ class Chef
       # Chef::Config.cookbook_path file hierarchy for the requested
       # file.
       def get_filename(filename)
-        location = File.join(cookbooks[cookbook_name].root_dir, filename) if cookbooks.has_key?(cookbook_name)
+        location = File.join(cookbooks[cookbook_name].root_dir, filename) if cookbooks.key?(cookbook_name)
         raise "File #{filename} does not exist for cookbook #{cookbook_name}" unless location && File.exist?(location)
+
         location
       end
 

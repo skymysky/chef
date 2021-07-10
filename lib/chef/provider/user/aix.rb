@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2012-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "chef/provider/user"
+require_relative "../user"
 
 class Chef
   class Provider
@@ -24,7 +24,7 @@ class Chef
         provides :aix_user
 
         def create_user
-          shell_out_compact!("useradd", universal_options, useradd_options, new_resource.username)
+          shell_out!("useradd", universal_options, useradd_options, new_resource.username)
           add_password
         end
 
@@ -32,14 +32,15 @@ class Chef
           add_password
           manage_home
           return if universal_options.empty? && usermod_options.empty?
-          shell_out_compact!("usermod", universal_options, usermod_options, new_resource.username)
+
+          shell_out!("usermod", universal_options, usermod_options, new_resource.username)
         end
 
         def remove_user
-          shell_out_compact!("userdel", userdel_options, new_resource.username)
+          shell_out!("userdel", userdel_options, new_resource.username)
         end
 
-        # Aix does not support -r like other unix, sytem account is created by adding to 'system' group
+        # Aix does not support -r like other unix, system account is created by adding to 'system' group
         def useradd_options
           opts = []
           opts << "-g" << "system" if new_resource.system
@@ -66,8 +67,8 @@ class Chef
         end
 
         def check_lock
-          lock_info = shell_out_compact!("lsuser", "-a", "account_locked", new_resource.username)
-          if whyrun_mode? && passwd_s.stdout.empty? && lock_info.stderr.match(/does not exist/)
+          lock_info = shell_out!("lsuser", "-a", "account_locked", new_resource.username)
+          if whyrun_mode? && passwd_s.stdout.empty? && lock_info.stderr.include?("does not exist")
             # if we're in whyrun mode and the user is not yet created we assume it would be
             return false
           end
@@ -85,11 +86,11 @@ class Chef
         end
 
         def lock_user
-          shell_out_compact!("chuser", "account_locked=true", new_resource.username)
+          shell_out!("chuser", "account_locked=true", new_resource.username)
         end
 
         def unlock_user
-          shell_out_compact!("chuser", "account_locked=false", new_resource.username)
+          shell_out!("chuser", "account_locked=false", new_resource.username)
         end
 
         def universal_options
@@ -107,14 +108,16 @@ class Chef
 
         def add_password
           return unless current_resource.password != new_resource.password && new_resource.password
+
           logger.trace("#{new_resource.username} setting password to #{new_resource.password}")
-          command = "echo '#{new_resource.username}:#{new_resource.password}' | chpasswd -e"
+          command = "echo '#{new_resource.username}:#{new_resource.password}' | chpasswd -c -e"
           shell_out!(command)
         end
 
         # Aix specific handling to update users home directory.
         def manage_home
           return unless updating_home? && new_resource.manage_home
+
           # -m option does not work on aix, so move dir.
           if ::File.directory?(current_resource.home)
             logger.trace("Changing users home directory from #{current_resource.home} to #{new_resource.home}")

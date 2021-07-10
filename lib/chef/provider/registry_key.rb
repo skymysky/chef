@@ -2,7 +2,7 @@
 # Author:: Prajakta Purohit (<prajakta@chef.io>)
 # Author:: Lamont Granquist (<lamont@chef.io>)
 #
-# Copyright:: Copyright 2011-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,15 +17,15 @@
 # limitations under the License.
 #
 
-require "chef/config"
-require "chef/log"
-require "chef/resource/file"
-require "chef/mixin/checksum"
-require "chef/provider"
-require "etc"
-require "fileutils"
-require "chef/scan_access_control"
-require "chef/win32/registry"
+require_relative "../config"
+require_relative "../log"
+require_relative "../resource/file"
+require_relative "../mixin/checksum"
+require_relative "../provider"
+require "etc" unless defined?(Etc)
+require "fileutils" unless defined?(FileUtils)
+require_relative "../scan_access_control"
+require_relative "../win32/registry"
 
 class Chef
 
@@ -35,8 +35,10 @@ class Chef
 
       include Chef::Mixin::Checksum
 
+      WORD_TYPES = %i{dword dword_big_endian qword}.freeze
+
       def running_on_windows!
-        unless Chef::Platform.windows?
+        unless ChefUtils.windows?
           raise Chef::Exceptions::Win32NotWindows, "Attempt to manipulate the windows registry on a non-windows node"
         end
       end
@@ -68,7 +70,7 @@ class Chef
 
       def key_missing?(values, name)
         values.each do |v|
-          return true unless v.has_key?(name)
+          return true unless v.key?(name)
         end
         false
       end
@@ -92,7 +94,7 @@ class Chef
         end
 
         requirements.assert(:delete_key) do |a|
-          # If key to be deleted has subkeys but recurssive == false
+          # If key to be deleted has subkeys but recursive == false
           a.assertion { !registry.key_exists?(new_resource.key) || !registry.has_subkeys?(new_resource.key) || new_resource.recursive }
           a.failure_message(Chef::Exceptions::Win32RegNoRecursive, "#{new_resource.key} has subkeys but recursive is set to false.")
           a.whyrun("#{current_resource.key} has subkeys, but recursive is set to false. attempt to delete would fails unless subkeys were deleted prior to this action.")
@@ -113,29 +115,34 @@ class Chef
         end
       end
 
-      def action_create
+      action :create do
         unless registry.key_exists?(current_resource.key)
           converge_by("create key #{new_resource.key}") do
             registry.create_key(new_resource.key, new_resource.recursive)
           end
         end
         new_resource.unscrubbed_values.each do |value|
-          if @name_hash.has_key?(value[:name].downcase)
+          if @name_hash.key?(value[:name].downcase)
             current_value = @name_hash[value[:name].downcase]
-            if [:dword, :dword_big_endian, :qword].include? value[:type]
-              value[:data] = value[:data].to_i
-            end
+            value[:data] = value[:data].to_i if WORD_TYPES.include?(value[:type])
+
             unless current_value[:type] == value[:type] && current_value[:data] == value[:data]
-              converge_by_value = value
-              converge_by_value[:data] = "*sensitive value suppressed*" if new_resource.sensitive
+              converge_by_value = if new_resource.sensitive
+                                    value.merge(data: "*sensitive value suppressed*")
+                                  else
+                                    value
+                                  end
 
               converge_by("set value #{converge_by_value}") do
                 registry.set_value(new_resource.key, value)
               end
             end
           else
-            converge_by_value = value
-            converge_by_value[:data] = "*sensitive value suppressed*" if new_resource.sensitive
+            converge_by_value = if new_resource.sensitive
+                                  value.merge(data: "*sensitive value suppressed*")
+                                else
+                                  value
+                                end
 
             converge_by("set value #{converge_by_value}") do
               registry.set_value(new_resource.key, value)
@@ -144,16 +151,19 @@ class Chef
         end
       end
 
-      def action_create_if_missing
+      action :create_if_missing do
         unless registry.key_exists?(new_resource.key)
           converge_by("create key #{new_resource.key}") do
             registry.create_key(new_resource.key, new_resource.recursive)
           end
         end
         new_resource.unscrubbed_values.each do |value|
-          unless @name_hash.has_key?(value[:name].downcase)
-            converge_by_value = value
-            converge_by_value[:data] = "*sensitive value suppressed*" if new_resource.sensitive
+          unless @name_hash.key?(value[:name].downcase)
+            converge_by_value = if new_resource.sensitive
+                                  value.merge(data: "*sensitive value suppressed*")
+                                else
+                                  value
+                                end
 
             converge_by("create value #{converge_by_value}") do
               registry.set_value(new_resource.key, value)
@@ -162,10 +172,10 @@ class Chef
         end
       end
 
-      def action_delete
+      action :delete do
         if registry.key_exists?(new_resource.key)
           new_resource.unscrubbed_values.each do |value|
-            if @name_hash.has_key?(value[:name].downcase)
+            if @name_hash.key?(value[:name].downcase)
               converge_by_value = value
               converge_by_value[:data] = "*sensitive value suppressed*" if new_resource.sensitive
 
@@ -177,7 +187,7 @@ class Chef
         end
       end
 
-      def action_delete_key
+      action :delete_key do
         if registry.key_exists?(new_resource.key)
           converge_by("delete key #{new_resource.key}") do
             registry.delete_key(new_resource.key, new_resource.recursive)

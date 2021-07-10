@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,12 +16,14 @@
 # limitations under the License.
 #
 
-require "chef/config"
-require "chef/exceptions"
-require "chef/server_api"
+require_relative "../config"
+require_relative "../exceptions"
+require_relative "../server_api"
 
-require "uri"
-require "addressable/uri"
+autoload :URI, "uri"
+module Addressable
+  autoload :URI, "addressable/uri"
+end
 
 class Chef
   class Search
@@ -63,7 +65,7 @@ class Chef
 
         args_h = hashify_args(*args)
         if args_h[:fuzz]
-          if type == :node
+          if type.to_sym == :node
             query = fuzzify_node_query(query)
           end
           # FIXME: can i haz proper ruby-2.x named parameters someday plz?
@@ -105,7 +107,7 @@ class Chef
       private
 
       def fuzzify_node_query(query)
-        if query !~ /:/
+        if !/:/.match?(query)
           "tags:*#{query}* OR roles:*#{query}* OR fqdn:*#{query}* OR addresses:*#{query}* OR policy_name:*#{query}* OR policy_group:*#{query}*"
         else
           query
@@ -113,7 +115,7 @@ class Chef
       end
 
       def validate_type(t)
-        unless t.kind_of?(String) || t.kind_of?(Symbol)
+        unless t.is_a?(String) || t.is_a?(Symbol)
           msg = "Invalid search object type #{t.inspect} (#{t.class}), must be a String or Symbol." +
             "Usage: search(:node, QUERY[, OPTIONAL_ARGS])" +
             "        `knife search environment QUERY (options)`"
@@ -122,23 +124,19 @@ class Chef
       end
 
       def hashify_args(*args)
-        return Hash.new if args.empty?
+        return {} if args.empty?
         return args.first if args.first.is_a?(Hash)
 
-        args_h = Hash.new
-        # If we have 4 arguments, the first is the now-removed sort option, so
-        # just ignore it.
-        args.pop(0) if args.length == 4
+        args_h = {}
         args_h[:start] = args[0] if args[0]
         args_h[:rows] = args[1]
         args_h[:filter_result] = args[2]
         args_h
       end
 
-      QUERY_PARAM_VALUE = Addressable::URI::CharacterClasses::QUERY + "\\&\\;"
-
       def escape_value(s)
-        s && Addressable::URI.encode_component(s.to_s, QUERY_PARAM_VALUE)
+        query_param_value = Addressable::URI::CharacterClasses::QUERY + "\\&\\;"
+        s && Addressable::URI.encode_component(s.to_s, query_param_value)
       end
 
       def create_query_string(type, query, rows, start)

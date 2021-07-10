@@ -1,7 +1,23 @@
-require "chef/client"
-require "chef/util/threaded_job_queue"
-require "chef/server_api"
-require "singleton"
+# License:: Apache License, Version 2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+require_relative "../client"
+require_relative "../util/threaded_job_queue"
+require_relative "../server_api"
+require "singleton" unless defined?(Singleton)
+require "chef-utils/dist" unless defined?(ChefUtils::Dist)
 
 class Chef
 
@@ -31,6 +47,7 @@ class Chef
     end
 
     def reset!
+      @skip_removal = nil
       @valid_cache_entries = {}
     end
 
@@ -48,7 +65,7 @@ class Chef
         # manifest.
         cache.find(File.join(%w{cookbooks ** {*,.*}})).each do |cache_filename|
           unless @valid_cache_entries[cache_filename]
-            Chef::Log.info("Removing #{cache_filename} from the cache; it is no longer needed by chef-client.")
+            Chef::Log.info("Removing #{cache_filename} from the cache; it is no longer needed by #{ChefUtils::Dist::Infra::CLIENT}.")
             cache.delete(cache_filename)
           end
         end
@@ -122,15 +139,13 @@ class Chef
     end
 
     def files_by_cookbook
-      files.group_by { |file| file.cookbook }
+      files.group_by(&:cookbook)
     end
 
     def files_remaining_by_cookbook
-      @files_remaining_by_cookbook ||= begin
-        files_by_cookbook.inject({}) do |memo, (cookbook, files)|
-          memo[cookbook] = files.size
-          memo
-        end
+      @files_remaining_by_cookbook ||= files_by_cookbook.inject({}) do |memo, (cookbook, files)|
+        memo[cookbook] = files.size
+        memo
       end
     end
 
@@ -143,11 +158,11 @@ class Chef
     end
 
     # Synchronizes all the cookbooks from the chef-server.
-    #)
+    # )
     # === Returns
     # true:: Always returns true
     def sync_cookbooks
-      Chef::Log.info("Loading cookbooks [#{cookbooks.map { |ckbk| ckbk.name + '@' + ckbk.version }.join(', ')}]")
+      Chef::Log.info("Loading cookbooks [#{cookbooks.map { |ckbk| ckbk.name + "@" + ckbk.version }.join(", ")}]")
       Chef::Log.trace("Cookbooks detail: #{cookbooks.inspect}")
 
       clear_obsoleted_cookbooks
@@ -193,7 +208,7 @@ class Chef
     # (if we have an override run_list we may not want to do this)
     def remove_old_cookbooks
       cache.find(File.join(%w{cookbooks ** {*,.*}})).each do |cache_file|
-        cache_file =~ /^cookbooks\/([^\/]+)\//
+        cache_file =~ %r{^cookbooks/([^/]+)/}
         unless have_cookbook?($1)
           Chef::Log.info("Removing #{cache_file} from the cache; its cookbook is no longer needed on this client.")
           cache.delete(cache_file)
@@ -205,8 +220,9 @@ class Chef
     # remove deleted files in cookbooks that are being used on the node
     def remove_deleted_files
       cache.find(File.join(%w{cookbooks ** {*,.*}})).each do |cache_file|
-        md = cache_file.match(/^cookbooks\/([^\/]+)\/([^\/]+)\/(.*)/)
+        md = cache_file.match(%r{^cookbooks/([^/]+)/([^/]+)/(.*)})
         next unless md
+
         ( cookbook_name, segment, file ) = md[1..3]
         if have_cookbook?(cookbook_name)
           manifest_segment = cookbook_segment(cookbook_name, segment)
@@ -281,7 +297,8 @@ class Chef
 
     def cached_copy_up_to_date?(local_path, expected_checksum)
       return true if Chef::Config[:skip_cookbook_sync]
-      if cache.has_key?(local_path)
+
+      if cache.key?(local_path)
         current_checksum = CookbookVersion.checksum_cookbook_file(cache.load(local_path, false))
         expected_checksum == current_checksum
       else

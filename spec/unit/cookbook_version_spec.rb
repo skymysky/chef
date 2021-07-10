@@ -1,6 +1,6 @@
 #
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2010-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,16 +41,68 @@ describe Chef::CookbookVersion do
     it "has empty metadata" do
       expect(cookbook_version.metadata).to eq(Chef::Cookbook::Metadata.new)
     end
+  end
 
+  describe "#recipe_yml_filenames_by_name" do
+    let(:cookbook_version) { Chef::CookbookVersion.new("mycb", "/tmp/mycb") }
+
+    def files_for_recipe(extension)
+      [
+        { name: "recipes/default.#{extension}", full_path: "/home/user/repo/cookbooks/test/recipes/default.#{extension}" },
+        { name: "recipes/other.#{extension}", full_path: "/home/user/repo/cookbooks/test/recipes/other.#{extension}" },
+      ]
+    end
+    context "and YAML files present include both a recipes/default.yml and a recipes/default.yaml" do
+      before(:each) do
+        allow(cookbook_version).to receive(:files_for).with("recipes").and_return(
+          [
+            { name: "recipes/default.yml", full_path: "/home/user/repo/cookbooks/test/recipes/default.yml" },
+            { name: "recipes/default.yaml", full_path: "/home/user/repo/cookbooks/test/recipes/default.yaml" },
+          ]
+        )
+      end
+      it "because both are valid and we can't pick, it raises an error that contains the info needed to fix the problem" do
+        expect { cookbook_version.recipe_yml_filenames_by_name }
+          .to raise_error(Chef::Exceptions::AmbiguousYAMLFile, /.*default.yml.*default.yaml.*update the cookbook to remove/)
+      end
+    end
+
+    %w{yml yaml}.each do |extension|
+
+      context "and YAML files are present including a recipes/default.#{extension}" do
+        before(:each) do
+          allow(cookbook_version).to receive(:files_for).with("recipes").and_return(files_for_recipe(extension))
+        end
+
+        context "and manifest does not include a root_files/recipe.#{extension}" do
+          it "returns all YAML recipes with a correct default of default.#{extension}" do
+            expect(cookbook_version.recipe_yml_filenames_by_name).to eq({ "default" => "/home/user/repo/cookbooks/test/recipes/default.#{extension}",
+                                                                        "other" => "/home/user/repo/cookbooks/test/recipes/other.#{extension}" })
+          end
+        end
+
+        context "and manifest also includes a root_files/recipe.#{extension}" do
+          let(:root_files) { [{ name: "root_files/recipe.#{extension}", full_path: "/home/user/repo/cookbooks/test/recipe.#{extension}" } ] }
+          before(:each) do
+            allow(cookbook_version.cookbook_manifest).to receive(:root_files).and_return(root_files)
+          end
+
+          it "returns all YAML recipes with a correct default of recipe.#{extension}" do
+            expect(cookbook_version.recipe_yml_filenames_by_name).to eq({ "default" => "/home/user/repo/cookbooks/test/recipe.#{extension}",
+                                                                         "other" => "/home/user/repo/cookbooks/test/recipes/other.#{extension}" })
+          end
+        end
+      end
+    end
   end
 
   describe "with a cookbook directory named tatft" do
-    MD5 = /[0-9a-f]{32}/
+    MD5 = /[0-9a-f]{32}/.freeze
 
     let(:cookbook_paths_by_type) do
       {
-        # Dunno if the paths here are representitive of what is set by CookbookLoader...
-        all_files:  Dir[File.join(cookbook_root, "**", "**")],
+        # Dunno if the paths here are representative of what is set by CookbookLoader...
+        all_files: Dir[File.join(cookbook_root, "**", "**")],
       }
     end
 
@@ -117,7 +169,7 @@ describe Chef::CookbookVersion do
 
     let(:cookbook_paths_by_type) do
       {
-        all_files:  Dir[File.join(cookbook_root, "**", "**")],
+        all_files: Dir[File.join(cookbook_root, "**", "**")],
       }
     end
 

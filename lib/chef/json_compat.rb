@@ -1,6 +1,6 @@
 #
 # Author:: Tim Hinderliter (<tim@chef.io>)
-# Copyright:: Copyright 2010-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,32 +17,29 @@
 
 # Wrapper class for interacting with JSON.
 
-require "ffi_yajl"
-require "chef/exceptions"
+autoload :FFI_Yajl, "ffi_yajl"
+require_relative "exceptions"
 # We're requiring this to prevent breaking consumers using Hash.to_json
-require "json"
+require "json" unless defined?(JSON)
 
 class Chef
   class JSONCompat
-    JSON_MAX_NESTING = 1000
 
-    class <<self
+    class << self
 
-      # API to use to avoid create_addtions
       def parse(source, opts = {})
         FFI_Yajl::Parser.parse(source, opts)
       rescue FFI_Yajl::ParseError => e
         raise Chef::Exceptions::JSON::ParseError, e.message
       end
 
-      # Just call the JSON gem's parse method with a modified :max_nesting field
       def from_json(source, opts = {})
         obj = parse(source, opts)
 
         # JSON gem requires top level object to be a Hash or Array (otherwise
         # you get the "must contain two octets" error). Yajl doesn't impose the
         # same limitation. For compatibility, we re-impose this condition.
-        unless obj.kind_of?(Hash) || obj.kind_of?(Array)
+        unless obj.is_a?(Hash) || obj.is_a?(Array)
           raise Chef::Exceptions::JSON::ParseError, "Top level JSON object must be a Hash or Array. (actual: #{obj.class})"
         end
 
@@ -56,10 +53,8 @@ class Chef
       end
 
       def to_json_pretty(obj, opts = nil)
-        opts ||= {}
-        options_map = {}
-        options_map[:pretty] = true
-        options_map[:indent] = opts[:indent] if opts.has_key?(:indent)
+        options_map = { pretty: true }
+        options_map[:indent] = opts[:indent] if opts.respond_to?(:key?) && opts.key?(:indent)
         to_json(obj, options_map).chomp
       end
 

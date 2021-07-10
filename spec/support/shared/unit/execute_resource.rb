@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Tyler Cloke (<tyler@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
-require "spec_helper"
 
 shared_examples_for "an execute resource" do
 
@@ -57,7 +55,7 @@ shared_examples_for "an execute resource" do
   end
 
   it "should accept a hash for the environment" do
-    test_hash = { :one => :two }
+    test_hash = { one: :two }
     @resource.environment(test_hash)
     expect(@resource.environment).to eql(test_hash)
   end
@@ -77,7 +75,7 @@ shared_examples_for "an execute resource" do
   end
 
   it "the old path property (that never worked) is not supported in chef >= 13" do
-    expect { @resource.path [ "woot" ] }.to raise_error
+    expect(@resource).not_to respond_to(:path)
   end
 
   it "should accept an integer for the return code" do
@@ -155,7 +153,7 @@ shared_examples_for "an execute resource" do
     before do
       @resource.command("grep")
       @resource.cwd("/tmp/")
-      @resource.environment({ :one => :two })
+      @resource.environment({ one: :two })
       @resource.group("legos")
       @resource.returns(1)
       @resource.user("root")

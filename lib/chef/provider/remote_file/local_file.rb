@@ -16,9 +16,10 @@
 # limitations under the License.
 #
 
-require "uri"
-require "tempfile"
-require "chef/provider/remote_file"
+require "uri" unless defined?(URI)
+require "cgi" unless defined?(CGI)
+require "tempfile" unless defined?(Tempfile)
+require_relative "../remote_file"
 
 class Chef
   class Provider
@@ -35,13 +36,13 @@ class Chef
 
         # CHEF-4472: Remove the leading slash from windows paths that we receive from a file:// URI
         def fix_windows_path(path)
-          path.gsub(/^\/([a-zA-Z]:)/, '\1')
+          path.gsub(%r{^/([a-zA-Z]:)}, '\1')
         end
 
         def source_path
           @source_path ||= begin
-            path = URI.unescape(uri.path)
-            Chef::Platform.windows? ? fix_windows_path(path) : path
+            path = CGI.unescape(uri.path)
+            ChefUtils.windows? ? fix_windows_path(path) : path
           end
         end
 

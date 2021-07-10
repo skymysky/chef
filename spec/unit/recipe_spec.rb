@@ -3,7 +3,7 @@
 # Author:: Christopher Walters (<cw@chef.io>)
 # Author:: Tim Hinderliter (<tim@chef.io>)
 # Author:: Seth Chisamore (<schisamo@chef.io>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@ require "chef/platform/resource_priority_map"
 describe Chef::Recipe do
 
   let(:cookbook_collection) do
-    cookbook_repo = File.expand_path(File.join(File.dirname(__FILE__), "..", "data", "cookbooks"))
+    cookbook_repo = File.expand_path(File.join(__dir__, "..", "data", "cookbooks"))
     cookbook_loader = Chef::CookbookLoader.new(cookbook_repo)
     cookbook_loader.load_cookbooks
     Chef::CookbookCollection.new(cookbook_loader)
@@ -94,7 +94,7 @@ describe Chef::Recipe do
           end
         end
 
-        expect(run_context.resource_collection.map { |r| r.name }).to eql(%w{monkey dog cat})
+        expect(run_context.resource_collection.map(&:name)).to eql(%w{monkey dog cat})
       end
 
       it "should return the new resource after creating it" do
@@ -110,12 +110,12 @@ describe Chef::Recipe do
         it "locate resource for particular platform" do
           ShaunTheSheep = Class.new(Chef::Resource)
           ShaunTheSheep.resource_name :shaun_the_sheep
-          ShaunTheSheep.provides :laughter, :platform => ["television"]
+          ShaunTheSheep.provides :laughter, platform: ["television"]
           node.automatic[:platform] = "television"
           node.automatic[:platform_version] = "123"
           res = recipe.laughter "timmy"
           expect(res.name).to eql("timmy")
-          res.kind_of?(ShaunTheSheep)
+          res.is_a?(ShaunTheSheep)
         end
 
         it "locate a resource for all platforms" do
@@ -124,7 +124,7 @@ describe Chef::Recipe do
           YourMom.provides :love_and_caring
           res = recipe.love_and_caring "mommy"
           expect(res.name).to eql("mommy")
-          res.kind_of?(YourMom)
+          res.is_a?(YourMom)
         end
 
         describe "when there is more than one resource that resolves on a node" do
@@ -183,7 +183,7 @@ describe Chef::Recipe do
 
       it "does not add the resource to the resource collection" do
         zm_resource # force let binding evaluation
-        expect { run_context.resource_collection.resources(:zen_master => "klopp") }.to raise_error(Chef::Exceptions::ResourceNotFound)
+        expect { run_context.resource_collection.resources(zen_master: "klopp") }.to raise_error(Chef::Exceptions::ResourceNotFound)
       end
     end
 
@@ -238,7 +238,7 @@ describe Chef::Recipe do
 
       it "adds the resource to the resource collection" do
         zm_resource # force let binding evaluation
-        expect(run_context.resource_collection.resources(:zen_master => "klopp")).to eq(zm_resource)
+        expect(run_context.resource_collection.resources(zen_master: "klopp")).to eq(zm_resource)
       end
 
       it "will insert another resource if create_if_missing is not set (cloned resource as of Chef-12)" do
@@ -339,7 +339,7 @@ describe Chef::Recipe do
     describe "resource definitions" do
       it "should execute defined resources" do
         crow_define = Chef::ResourceDefinition.new
-        crow_define.define :crow, :peace => false, :something => true do
+        crow_define.define :crow, peace: false, something: true do
           zen_master "lao tzu" do
             peace params[:peace]
             something params[:something]
@@ -349,13 +349,13 @@ describe Chef::Recipe do
         recipe.crow "mine" do
           peace true
         end
-        expect(run_context.resource_collection.resources(:zen_master => "lao tzu").name).to eql("lao tzu")
-        expect(run_context.resource_collection.resources(:zen_master => "lao tzu").something).to eql(true)
+        expect(run_context.resource_collection.resources(zen_master: "lao tzu").name).to eql("lao tzu")
+        expect(run_context.resource_collection.resources(zen_master: "lao tzu").something).to eql(true)
       end
 
       it "should set the node on defined resources" do
         crow_define = Chef::ResourceDefinition.new
-        crow_define.define :crow, :peace => false, :something => true do
+        crow_define.define :crow, peace: false, something: true do
           zen_master "lao tzu" do
             peace params[:peace]
             something params[:something]
@@ -366,12 +366,12 @@ describe Chef::Recipe do
         recipe.crow "mine" do
           something node[:foo]
         end
-        expect(recipe.resources(:zen_master => "lao tzu").something).to eql(false)
+        expect(recipe.resources(zen_master: "lao tzu").something).to eql(false)
       end
 
       it "should return the last statement in the definition as the retval" do
         crow_define = Chef::ResourceDefinition.new
-        crow_define.define :crow, :peace => false, :something => true do
+        crow_define.define :crow, peace: false, something: true do
           "the return val"
         end
         run_context.definitions[:crow] = crow_define
@@ -390,9 +390,9 @@ describe Chef::Recipe do
   zen_master "gnome" do
     peace = true
   end
-  CODE
+      CODE
       expect { recipe.instance_eval(code) }.not_to raise_error
-      expect(recipe.resources(:zen_master => "gnome").name).to eql("gnome")
+      expect(recipe.resources(zen_master: "gnome").name).to eql("gnome")
     end
   end
 
@@ -408,7 +408,7 @@ describe Chef::Recipe do
   describe "from_file" do
     it "should load a resource from a ruby file" do
       recipe.from_file(File.join(CHEF_SPEC_DATA, "recipes", "test.rb"))
-      res = recipe.resources(:file => "/etc/nsswitch.conf")
+      res = recipe.resources(file: "/etc/nsswitch.conf")
       expect(res.name).to eql("/etc/nsswitch.conf")
       expect(res.action).to eql([:create])
       expect(res.owner).to eql("root")
@@ -426,7 +426,7 @@ describe Chef::Recipe do
       expect(node).to receive(:loaded_recipe).with(:openldap, "gigantor")
       allow(run_context).to receive(:unreachable_cookbook?).with(:openldap).and_return(false)
       run_context.include_recipe "openldap::gigantor"
-      res = run_context.resource_collection.resources(:cat => "blanket")
+      res = run_context.resource_collection.resources(cat: "blanket")
       expect(res.name).to eql("blanket")
       expect(res.pretty_kitty).to eql(false)
     end
@@ -435,7 +435,7 @@ describe Chef::Recipe do
       expect(node).to receive(:loaded_recipe).with(:openldap, "default")
       allow(run_context).to receive(:unreachable_cookbook?).with(:openldap).and_return(false)
       run_context.include_recipe "openldap"
-      res = run_context.resource_collection.resources(:cat => "blanket")
+      res = run_context.resource_collection.resources(cat: "blanket")
       expect(res.name).to eql("blanket")
       expect(res.pretty_kitty).to eql(true)
     end
@@ -576,12 +576,75 @@ describe Chef::Recipe do
     end
   end
 
-  describe "included DSL" do
-    it "should include features from Chef::DSL::Audit" do
-      expect(recipe.singleton_class.included_modules).to include(Chef::DSL::Audit)
-      expect(recipe.respond_to?(:control_group)).to be true
+  describe "from_yaml_file" do
+    it "raises ArgumentError if the YAML file contains multiple documents" do
+      filename = "multiple_docs.yaml"
+      yaml = "---\n- resources:\n  - type: false\n---\n-resources:\n  - type: false\n"
+      allow(File).to receive(:file?).and_call_original
+      allow(File).to receive(:readable?).and_call_original
+      allow(IO).to receive(:read).and_call_original
+      allow(File).to receive(:file?).with(filename).and_return(true)
+      allow(File).to receive(:readable?).with(filename).and_return(true)
+      allow(IO).to receive(:read).with(filename).and_return(yaml)
+      expect { recipe.from_yaml_file(filename) }.to raise_error(ArgumentError, /contains multiple documents/)
     end
 
+    it "raises IOError if the file does not exist" do
+      filename = "/nonexistent"
+      allow(File).to receive(:file?).and_call_original
+      allow(File).to receive(:file?).with(filename).and_return(false)
+      expect { recipe.from_yaml_file(filename) }.to raise_error(IOError, /Cannot open or read/)
+    end
+  end
+
+  describe "from_yaml" do
+    it "raises ArgumentError if the YAML is not a top-level hash" do
+      yaml = <<~YAML
+        ---
+        - one
+        - resources
+        - three
+      YAML
+      expect { recipe.from_yaml(yaml) }.to raise_error(ArgumentError, /must contain a top-level 'resources' hash/)
+    end
+
+    it "raises ArgumentError if the YAML does not contain a resources hash" do
+      yaml = <<~YAML
+        ---
+        - airplanes:
+          - type: "execute"
+            command: "whoami"
+      YAML
+      expect { recipe.from_yaml(yaml) }.to raise_error(ArgumentError, /must contain a top-level 'resources' hash/)
+    end
+
+    it "does not raise if the YAML contains a resources hash" do
+      yaml = <<~YAML
+        ---
+        resources:
+        - type: "execute"
+          command: "whoami"
+      YAML
+      expect(recipe).to receive(:from_hash).with({ "resources" => [{ "command" => "whoami", "type" => "execute" }] })
+      recipe.from_yaml(yaml)
+    end
+  end
+
+  describe "from_hash" do
+    it "declares resources from a hash" do
+      resources = { "resources" => [
+        { "name" => "running some commands", "type" => "execute", "command" => "whoami" },
+        { "name" => "preparing the bits", "type" => "service", "action" => "start", "service_name" => "bit_launcher" },
+      ] }
+
+      recipe.from_hash(resources)
+      expect(recipe.resources(execute: "running some commands").command).to eql("whoami")
+      expect(recipe.resources(service: "preparing the bits").service_name).to eql("bit_launcher")
+      expect(recipe.resources(service: "preparing the bits").action).to eql([:start])
+    end
+  end
+
+  describe "included DSL" do
     it "should respond to :ps_credential from Chef::DSL::Powershell" do
       expect(recipe.respond_to?(:ps_credential)).to be true
     end

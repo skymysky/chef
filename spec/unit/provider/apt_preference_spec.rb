@@ -1,7 +1,7 @@
 #
 # Author:: Thom May (<thom@chef.io>)
 # Author:: Tim Smith (<tim@chef.io>)
-# Copyright:: 2016-2017, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,22 +18,26 @@
 #
 
 require "spec_helper"
+require "chef/resource/apt_preference"
 
-describe Chef::Provider::AptPreference do
-  let(:new_resource) { Chef::Resource::AptPreference.new("libmysqlclient16.1*") }
+# FIXME: provider has been moved to a custom resource, should migrate the unit tests
+#
+describe "Chef::Provider::AptPreference" do
+  let(:node) { Chef::Node.new }
+  let(:events) { Chef::EventDispatch::Dispatcher.new }
+  let(:run_context) { Chef::RunContext.new(node, {}, events) }
+  let(:collection) { double("resource collection") }
+  let(:new_resource) { Chef::Resource::AptPreference.new("libmysqlclient16.1*", run_context) }
   let(:pref_dir) { Dir.mktmpdir("apt_pref_d") }
+  let(:provider) { new_resource.provider_for_action(:add) }
 
   before do
-    stub_const("Chef::Provider::AptPreference::APT_PREFERENCE_DIR", pref_dir)
+    node.automatic["platform_family"] = "debian"
+    Chef::Resource::AptPreference.send(:remove_const, :APT_PREFERENCE_DIR)
+    Chef::Resource::AptPreference.const_set(:APT_PREFERENCE_DIR, pref_dir)
+
     new_resource.pin = "1.0.1"
     new_resource.pin_priority 1001
-  end
-
-  let(:provider) do
-    node = Chef::Node.new
-    events = Chef::EventDispatch::Dispatcher.new
-    run_context = Chef::RunContext.new(node, {}, events)
-    Chef::Provider::AptPreference.new(new_resource, run_context)
   end
 
   it "responds to load_current_resource" do
@@ -78,7 +82,7 @@ describe Chef::Provider::AptPreference do
       FileUtils.touch("#{pref_dir}/libmysqlclient16_1wildcard.pref")
     end
 
-    it "deletes the name santized .pref file" do
+    it "deletes the name sanitized .pref file" do
       provider.run_action(:remove)
       expect(new_resource).to be_updated_by_last_action
       expect(File).not_to exist("#{pref_dir}/libmysqlclient16_1wildcard.pref")

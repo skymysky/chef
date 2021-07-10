@@ -1,7 +1,7 @@
 #
 # Author:: Stephen Delano (<stephen@chef.io>)
 # Author:: Seth Falcon (<seth@chef.io>)
-# Copyright:: Copyright 2010-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-require "chef/version_class"
-require "chef/version_constraint"
+require_relative "../version_class"
+require_relative "../version_constraint"
 
 # Why does this class exist?
 # Why did we not just modify RunList/RunListItem?
@@ -26,11 +26,11 @@ class Chef
 
       def initialize
         super
-        @versions = Hash.new
+        @versions = {}
       end
 
       def add_recipe(name, version = nil)
-        if version && @versions.has_key?(name)
+        if version && @versions.key?(name)
           unless Chef::Version.new(@versions[name]) == Chef::Version.new(version)
             raise Chef::Exceptions::CookbookVersionConflict, "Run list requires #{name} at versions #{@versions[name]} and #{version}"
           end
@@ -40,7 +40,7 @@ class Chef
       end
 
       def with_versions
-        map { |recipe_name| { :name => recipe_name, :version => @versions[recipe_name] } }
+        map { |recipe_name| { name: recipe_name, version: @versions[recipe_name] } }
       end
 
       # Return an Array of Hashes, each of the form:
@@ -48,7 +48,7 @@ class Chef
       def with_version_constraints
         map do |recipe_name|
           constraint = Chef::VersionConstraint.new(@versions[recipe_name])
-          { :name => recipe_name, :version_constraint => constraint }
+          { name: recipe_name, version_constraint: constraint }
         end
       end
 

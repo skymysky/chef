@@ -1,6 +1,6 @@
 #
 # Author:: John Keiser (<jkeiser@chef.io>)
-# Copyright:: Copyright 2012-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/chef_fs/file_system/chef_server/cookbooks_dir"
-require "chef/chef_fs/file_system/chef_server/cookbook_artifact_dir"
+require_relative "cookbooks_dir"
+require_relative "cookbook_artifact_dir"
 
 class Chef
   module ChefFS
@@ -44,7 +44,7 @@ class Chef
               result = []
               root.get_json("#{api_path}/?num_versions=all").each_pair do |cookbook_name, cookbooks|
                 cookbooks["versions"].each do |cookbook_version|
-                  result << CookbookArtifactDir.new("#{cookbook_name}-#{cookbook_version['identifier']}", self)
+                  result << CookbookArtifactDir.new("#{cookbook_name}-#{cookbook_version["identifier"]}", self)
                 end
               end
               result.sort_by(&:name)
@@ -65,8 +65,8 @@ class Chef
               file_class.symlink other.file_path, proxy_cookbook_path
 
               # Instantiate a proxy loader using the temporary symlink
-              proxy_loader = Chef::Cookbook::CookbookVersionLoader.new(proxy_cookbook_path, other.parent.chefignore)
-              proxy_loader.load_cookbooks
+              proxy_loader = Chef::Cookbook::CookbookVersionLoader.new(proxy_cookbook_path, other.chefignore)
+              proxy_loader.load!
 
               cookbook_to_upload = proxy_loader.cookbook_version
               cookbook_to_upload.identifier = identifier
@@ -86,7 +86,7 @@ class Chef
               # the symlink without removing the original contents if we
               # are running on windows
               #
-              if Chef::Platform.windows?
+              if ChefUtils.windows?
                 Dir.rmdir proxy_cookbook_path
               end
             end

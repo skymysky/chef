@@ -45,17 +45,29 @@ describe "Chef::Resource.property validation" do
       def self.blah
         "class#{Namer.next_index}"
       end
+
+      action :doit do
+        # this needs to not reference any properties
+      end
+
+      action :doit2 do
+        # this needs to not reference any properties
+      end
     end
   end
 
+  let(:node) { Chef::Node.new }
+  let(:events) { Chef::EventDispatch::Dispatcher.new }
+  let(:run_context) { Chef::RunContext.new(node, {}, events) }
   let(:resource) do
-    resource_class.new("blah")
+    resource_class.new("blah", run_context)
   end
 
   def self.english_join(values)
     return "<nothing>" if values.size == 0
     return values[0].inspect if values.size == 1
-    "#{values[0..-2].map { |v| v.inspect }.join(", ")} and #{values[-1].inspect}"
+
+    "#{values[0..-2].map(&:inspect).join(", ")} and #{values[-1].inspect}"
   end
 
   def self.with_property(*properties, &block)
@@ -231,19 +243,19 @@ describe "Chef::Resource.property validation" do
       [ :b ]
 
     validation_test ":a, is: :b",
-      [ :a, :b ],
+      %i{a b},
       [ :c ]
 
     validation_test ":a, is: [ :b, :c ]",
-      [ :a, :b, :c ],
+      %i{a b c},
       [ :d ]
 
     validation_test "[ :a, :b ], is: :c",
-      [ :a, :b, :c ],
+      %i{a b c},
       [ :d ]
 
     validation_test "[ :a, :b ], is: [ :c, :d ]",
-      [ :a, :b, :c, :d ],
+      %i{a b c d},
       [ :e ]
 
     validation_test "nil",
@@ -279,12 +291,12 @@ describe "Chef::Resource.property validation" do
       [ :b ]
 
     validation_test "is: [ :a, :b ]",
-      [ :a, :b ],
-      [ [ :a, :b ] ]
+      %i{a b},
+      [ %i{a b} ]
 
     validation_test "is: [ [ :a, :b ] ]",
-      [ [ :a, :b ] ],
-      [ :a, :b ]
+      [ %i{a b} ],
+      %i{a b}
 
     # Regex
     validation_test "is: /abc/",
@@ -352,13 +364,13 @@ describe "Chef::Resource.property validation" do
       :nil_is_valid
 
     validation_test "equal_to: [ :a, :b ]",
-      [ :a, :b ],
-      [ [ :a, :b ] ],
+      %i{a b},
+      [ %i{a b} ],
       :nil_is_valid
 
     validation_test "equal_to: [ [ :a, :b ] ]",
-      [ [ :a, :b ] ],
-      [ :a, :b ],
+      [ %i{a b} ],
+      %i{a b},
       :nil_is_valid
 
     validation_test "equal_to: nil",
@@ -574,6 +586,19 @@ describe "Chef::Resource.property validation" do
       end
       it "value nil emits a validation failed error because it must have a value" do
         expect { resource.x nil }.to raise_error Chef::Exceptions::ValidationFailed
+      end
+      it "fails if it is not specified, on running the action, even if it is not referenced" do
+        expect { resource.run_action(:doit) }.to raise_error Chef::Exceptions::ValidationFailed
+      end
+    end
+
+    with_property ":x, required: %i{doit}" do
+      it "fails if it is not specified, on running the doit action, even if it is not referenced" do
+        expect { resource.run_action(:doit) }.to raise_error Chef::Exceptions::ValidationFailed
+      end
+
+      it "does not fail if it is not specified, on running the doit2 action" do
+        expect { resource.run_action(:doit2) }.not_to raise_error
       end
     end
 

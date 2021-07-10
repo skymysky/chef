@@ -1,6 +1,6 @@
 #
 # Author:: Lamont Granquist (<lamont@chef.io>)
-# Copyright:: Copyright 2015-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,9 +29,10 @@ class Chef
     attr_reader :recipe_name
     attr_reader :enclosing_provider
     attr_reader :resource
+    attr_reader :new_resource
 
     # FIXME (ruby-2.1 syntax): most of these are mandatory
-    def initialize(type: nil, name: nil, created_at: nil, params: nil, run_context: nil, cookbook_name: nil, recipe_name: nil, enclosing_provider: nil)
+    def initialize(type: nil, name: nil, created_at: nil, params: nil, run_context: nil, cookbook_name: nil, recipe_name: nil, enclosing_provider: nil, new_resource: nil)
       @type               = type
       @name               = name
       @created_at         = created_at
@@ -40,6 +41,7 @@ class Chef
       @cookbook_name      = cookbook_name
       @recipe_name        = recipe_name
       @enclosing_provider = enclosing_provider
+      @new_resource       = new_resource
     end
 
     def build(&block)
@@ -47,6 +49,7 @@ class Chef
       if resource.resource_name.nil?
         raise Chef::Exceptions::InvalidResourceSpecification, "#{resource}.resource_name is `nil`!  Did you forget to put `provides :blah` or `resource_name :blah` in your resource class?"
       end
+
       resource.source_line = created_at
       resource.declared_type = type
 
@@ -63,7 +66,11 @@ class Chef
       if block_given?
         resource.resource_initializing = true
         begin
-          resource.instance_eval(&block)
+          if new_resource.nil?
+            resource.instance_exec(&block)
+          else
+            resource.instance_exec(new_resource, &block)
+          end
         ensure
           resource.resource_initializing = false
         end
@@ -71,6 +78,14 @@ class Chef
 
       # Run optional resource hook
       resource.after_created
+
+      # Force to compile_time execution if the flag is set
+      if resource.compile_time
+        Array(resource.action).each do |action|
+          resource.run_action(action)
+        end
+        resource.action :nothing
+      end
 
       resource
     end
@@ -87,6 +102,6 @@ class Chef
   end
 end
 
-require "chef/exceptions"
-require "chef/resource"
-require "chef/log"
+require_relative "exceptions"
+require_relative "resource"
+require_relative "log"

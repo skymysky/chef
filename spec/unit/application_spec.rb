@@ -1,7 +1,7 @@
 #
 # Author:: AJ Christensen (<aj@junglist.gen.nz>)
 # Author:: Mark Mzyk (mmzyk@chef.io)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,12 +22,10 @@ describe Chef::Application do
   before do
     @original_argv = ARGV.dup
     ARGV.clear
-    Chef::Log.logger = Logger.new(StringIO.new)
     @app = Chef::Application.new
     allow(@app).to receive(:trap)
     allow(Dir).to receive(:chdir).and_return(0)
     allow(@app).to receive(:reconfigure)
-    Chef::Log.init(STDERR)
   end
 
   after do
@@ -87,6 +85,20 @@ describe Chef::Application do
           @app.run
         end
 
+        describe "when enforce_license is set to true" do
+          it "should check the license acceptance" do
+            expect(@app).to receive(:check_license_acceptance)
+            @app.run(enforce_license: true)
+          end
+        end
+
+        describe "when enforce_license is set to false" do
+          it "should not check the license acceptance" do
+            expect(@app).to_not receive(:check_license_acceptance)
+            @app.run(enforce_license: false)
+          end
+        end
+
         it "should run the actual application" do
           expect(@app).to receive(:run_application).and_return(true)
           @app.run
@@ -107,7 +119,7 @@ describe Chef::Application do
 
       it "should parse the commandline options" do
         expect(@app).to receive(:parse_options).and_return(true)
-        @app.config[:config_file] = "/etc/chef/default.rb" #have a config file set, to prevent triggering error block
+        @app.config[:config_file] = "/etc/chef/default.rb" # have a config file set, to prevent triggering error block
         @app.configure_chef
       end
 
@@ -127,9 +139,9 @@ describe Chef::Application do
           # force let binding to get evaluated or else we stub Pathname.new before we try to use it.
           config_location_pathname
           allow(Pathname).to receive(:new).with(config_location).and_return(config_location_pathname)
-          expect(File).to receive(:read).
-            with(config_location).
-            and_return(config_content)
+          expect(File).to receive(:read)
+            .with(config_location)
+            .and_return(config_content)
         end
 
         it "should configure chef::config from a file" do
@@ -138,7 +150,7 @@ describe Chef::Application do
         end
 
         it "should merge the local config hash into chef::config" do
-          #File.should_receive(:open).with("/etc/chef/default.rb").and_yield(@config_file)
+          # File.should_receive(:open).with("/etc/chef/default.rb").and_yield(@config_file)
           @app.configure_chef
           expect(Chef::Config.rspec_ran).to eq("true")
         end
@@ -162,7 +174,7 @@ describe Chef::Application do
 
         it "should emit a warning" do
           expect(Chef::Config).not_to receive(:from_file).with("/etc/chef/default.rb")
-          expect(Chef::Log).to receive(:warn).with("No config file found or specified on command line, using command line options.")
+          expect(Chef::Log).to receive(:warn).with("No config file found or specified on command line. Using command line options instead.")
           @app.configure_chef
         end
       end
@@ -187,7 +199,6 @@ describe Chef::Application do
       it "should initialise the chef logger" do
         allow(Chef::Log).to receive(:level=)
         @monologger = double("Monologger")
-        expect(MonoLogger).to receive(:new).with(Chef::Config[:log_location]).and_return(@monologger)
         allow(MonoLogger).to receive(:new).with(STDOUT).and_return(@monologger)
         allow(@monologger).to receive(:formatter=).with(Chef::Log.logger.formatter)
         expect(Chef::Log).to receive(:init).with(@monologger)
@@ -241,6 +252,10 @@ describe Chef::Application do
       end
 
       context "when log_level is not set" do
+        before do
+          Chef::Config.delete(:log_level)
+        end
+
         it_behaves_like "log_level_is_auto"
       end
 
@@ -265,12 +280,12 @@ describe Chef::Application do
             it "it sets log_location to an instance of #{expected_class}" do
               expect(expected_class).to receive(:new).with no_args
               @app.configure_logging
-              expect(Chef::Config[:log_location]).to be logger_instance
+              expect(Chef::Config[:log_location]).to eq([ logger_instance, STDOUT ])
             end
           end
         end
 
-        if Chef::Platform.windows?
+        if ChefUtils.windows?
           it_behaves_like "sets log_location", :win_evt, Chef::Log::WinEvt
           it_behaves_like "sets log_location", "win_evt", Chef::Log::WinEvt
         else
@@ -305,8 +320,8 @@ describe Chef::Application do
 
     describe "when a standard exit code is supplied" do
       it "should exit with the given exit code" do
-        expect(Process).to receive(:exit).with(42).and_return(true)
-        Chef::Application.fatal! "blah", 42
+        expect(Process).to receive(:exit).with(41).and_return(true)
+        Chef::Application.fatal! "blah", 41
       end
     end
 
@@ -386,18 +401,104 @@ describe Chef::Application do
 
   end
 
+  describe "#set_specific_recipes" do
+    let(:app) { Chef::Application.new }
+    context "when cli arguments does not contain any values" do
+      before do
+        allow(app).to receive(:cli_arguments).and_return([])
+      end
+
+      it "returns an empty array" do
+        app.set_specific_recipes
+        expect(Chef::Config[:specific_recipes]).to eq([])
+      end
+    end
+
+    context "when cli arguments contain valid recipe file path" do
+      let(:tempfile) { Tempfile.new("default.rb").path }
+      before do
+        allow(app).to receive(:cli_arguments).and_return([tempfile])
+      end
+
+      it "sets the specific recipes to config" do
+        app.set_specific_recipes
+        expect(Chef::Config[:specific_recipes]).to eq([tempfile])
+      end
+    end
+
+    context "when cli arguments contain invalid recipe file path" do
+      let(:fatal) { false }
+      before do
+        tempfile = "/root/default.rb"
+        allow(app).to receive(:cli_arguments).and_return([tempfile])
+        allow(Chef::Application).to receive(:fatal!).and_return(fatal)
+      end
+
+      it "raises an error with application exit" do
+        expect(app.set_specific_recipes).to eq(fatal)
+      end
+    end
+
+    context "when cli arguments contain empty string" do
+      let(:fatal) { false }
+      before do
+        allow(app).to receive(:cli_arguments).and_return([""])
+        allow(Chef::Application).to receive(:fatal!).and_return(fatal)
+      end
+
+      it "raises an arguments error" do
+        expect(app.set_specific_recipes).to eq(fatal)
+      end
+    end
+
+    context "when cli arguments contain any string" do
+      let(:fatal) { false }
+      before do
+        allow(app).to receive(:cli_arguments).and_return(["test"])
+        allow(Chef::Application).to receive(:fatal!).and_return(fatal)
+      end
+
+      it "raises an arguments error" do
+        expect(app.set_specific_recipes).to eq(fatal)
+      end
+    end
+
+    context "when cli arguments contain multiple invalid strings" do
+      let(:fatal) { false }
+      before do
+        allow(app).to receive(:cli_arguments).and_return(["", "test"])
+        allow(Chef::Application).to receive(:fatal!).and_return(fatal)
+      end
+
+      it "raises an arguments error" do
+        expect(app.set_specific_recipes).to eq(fatal)
+      end
+    end
+
+    context "when cli arguments contain valid recipe file path and invalid string" do
+      let(:fatal) { false }
+      before do
+        tempfile = Tempfile.new("default.rb").path
+        allow(app).to receive(:cli_arguments).and_return([tempfile, "test"])
+        allow(Chef::Application).to receive(:fatal!).and_return(fatal)
+      end
+
+      it "raises an arguments error" do
+        expect(app.set_specific_recipes).to eq(fatal)
+      end
+    end
+  end
+
   describe "configuration errors" do
     before do
-      expect(Process).to receive(:exit)
+      allow(Process).to receive(:exit).and_return(true)
     end
 
     def raises_informative_fatals_on_configure_chef
       config_file_regexp = Regexp.new @app.config[:config_file]
-      expect(Chef::Log).to receive(:fatal).
-        with(/Configuration error/)
-      expect(Chef::Log).to receive(:fatal).
-        with(config_file_regexp).
-        at_least(1).times
+      expect(Chef::Log).to receive(:fatal).with(/Configuration error/)
+      expect(Chef::Log).to receive(:fatal).with(config_file_regexp)
+      expect(Process).to receive(:exit).with(43).and_return(true)
       @app.configure_chef
     end
 
@@ -447,7 +548,7 @@ describe Chef::Application do
       ARGV.replace(@original_argv)
     end
 
-    let(:fake_config_fetcher) { instance_double(Chef::ConfigFetcher, expanded_path: "/thisbetternotexist", :"config_missing?" => false, read_config: "" ) }
+    let(:fake_config_fetcher) { instance_double(Chef::ConfigFetcher, expanded_path: "/thisbetternotexist", "config_missing?": false, read_config: "" ) }
 
     it "reading a mixlib-config default works" do
       @app.parse_options

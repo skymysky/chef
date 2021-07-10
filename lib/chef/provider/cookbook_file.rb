@@ -1,6 +1,6 @@
 #
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2010-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require "chef/provider/file"
+require_relative "file"
 
 class Chef
   class Provider
@@ -39,6 +39,7 @@ class Chef
       def managing_content?
         return true if new_resource.checksum
         return true if !new_resource.source.nil? && @action != :create_if_missing
+
         false
       end
 

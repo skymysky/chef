@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: AJ Christensen (<aj@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,16 +17,18 @@
 # limitations under the License.
 #
 
-require "chef/resource"
-require "chef/provider/ruby_block"
+require_relative "../resource"
+require_relative "../provider/ruby_block"
+require "chef-utils/dist" unless defined?(ChefUtils::Dist)
 
 class Chef
   class Resource
     class RubyBlock < Chef::Resource
-      description "Use the ruby_block resource to execute Ruby code during a chef-client run."\
-                  " Ruby code in the ruby_block resource is evaluated with other resources during"\
-                  " convergence, whereas Ruby code outside of a ruby_block resource is evaluated"\
-                  " before other resources, as the recipe is compiled."
+      unified_mode true
+
+      provides :ruby_block, target_mode: true
+
+      description "Use the **ruby_block** resource to execute Ruby code during a #{ChefUtils::Dist::Infra::PRODUCT} run. Ruby code in the `ruby_block` resource is evaluated with other resources during convergence, whereas Ruby code outside of a `ruby_block` resource is evaluated before other resources, as the recipe is compiled."
 
       default_action :run
       allowed_actions :create, :run
@@ -39,7 +41,7 @@ class Chef
         end
       end
 
-      property :block_name, String, name_property: true, identity: true
+      property :block_name, String, name_property: true
     end
   end
 end

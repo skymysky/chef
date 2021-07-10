@@ -1,6 +1,6 @@
 #
 # Author:: John Keiser (<jkeiser@chef.io>)
-# Copyright:: Copyright 2012-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,13 +16,13 @@
 # limitations under the License.
 #
 
-require "chef/chef_fs/command_line"
-require "chef/chef_fs/file_system/chef_server/rest_list_dir"
-require "chef/chef_fs/file_system/chef_server/cookbook_subdir"
-require "chef/chef_fs/file_system/chef_server/cookbook_file"
-require "chef/chef_fs/file_system/exceptions"
-require "chef/cookbook_version"
-require "chef/cookbook_uploader"
+require_relative "../../command_line"
+require_relative "rest_list_dir"
+require_relative "cookbook_subdir"
+require_relative "cookbook_file"
+require_relative "../exceptions"
+require_relative "../../../cookbook_version"
+require_relative "../../../cookbook_uploader"
 
 class Chef
   module ChefFS
@@ -69,6 +69,7 @@ class Chef
 
           def can_have_child?(name, is_dir)
             return name != "root_files" if is_dir
+
             true
           end
 
@@ -84,7 +85,7 @@ class Chef
                   parts[0, parts.length - 1].each do |part|
                     old_container = container
                     container = old_container.children.find { |child| part == child.name }
-                    if !container
+                    unless container
                       container = CookbookSubdir.new(part, old_container, false, true)
                       old_container.add_child(container)
                     end
@@ -93,7 +94,7 @@ class Chef
                   container.add_child(CookbookFile.new(parts[parts.length - 1], container, file))
                 end
               end
-              @children = @children.sort_by { |c| c.name }
+              @children = @children.sort_by(&:name)
             end
             @children
           end
@@ -108,7 +109,7 @@ class Chef
                 rest.delete(api_path)
               rescue Timeout::Error => e
                 raise Chef::ChefFS::FileSystem::OperationFailedError.new(:delete, self, e, "Timeout deleting: #{e}")
-              rescue Net::HTTPServerException
+              rescue Net::HTTPClientException
                 if $!.response.code == "404"
                   raise Chef::ChefFS::FileSystem::NotFoundError.new(self, $!)
                 else
@@ -116,7 +117,8 @@ class Chef
                 end
               end
             else
-              raise NotFoundError.new(self) if !exists?
+              raise NotFoundError.new(self) unless exists?
+
               raise MustDeleteRecursivelyError.new(self, "#{path_for_printing} must be deleted recursively")
             end
           end
@@ -131,12 +133,13 @@ class Chef
           end
 
           def compare_to(other)
-            if !other.dir?
+            unless other.dir?
               return [ !exists?, nil, nil ]
             end
+
             are_same = true
             Chef::ChefFS::CommandLine.diff_entries(self, other, nil, :name_only).each do |type, old_entry, new_entry|
-              if [ :directory_to_file, :file_to_directory, :deleted, :added, :modified ].include?(type)
+              if %i{directory_to_file file_to_directory deleted added modified}.include?(type)
                 are_same = false
               end
             end
@@ -182,7 +185,7 @@ class Chef
             rescue Timeout::Error => e
               raise Chef::ChefFS::FileSystem::OperationFailedError.new(:read, self, e, "Timeout reading: #{e}")
 
-            rescue Net::HTTPServerException => e
+            rescue Net::HTTPClientException => e
               if e.response.code == "404"
                 @could_not_get_chef_object = e
                 raise Chef::ChefFS::FileSystem::NotFoundError.new(self, @could_not_get_chef_object)

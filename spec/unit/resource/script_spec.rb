@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Tyler Cloke (<tyler@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,8 +21,13 @@ require "spec_helper"
 
 describe Chef::Resource::Script do
   let(:resource_instance_name) { "fakey_fakerton" }
-  let(:script_resource) { Chef::Resource::Script.new(resource_instance_name) }
   let(:resource_name) { :script }
+
+  let(:script_resource) do
+    run_context = Chef::RunContext.new(Chef::Node.new, nil, nil)
+
+    Chef::Resource::Script.new(resource_instance_name, run_context)
+  end
 
   it "sets the default action as :run" do
     expect(script_resource.action).to eql([:run])

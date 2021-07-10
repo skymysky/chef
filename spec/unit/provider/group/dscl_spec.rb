@@ -1,6 +1,6 @@
 #
 # Author:: Dreamcat4 (<dreamcat4@gmail.com>)
-# Copyright:: Copyright 2009-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -32,11 +32,11 @@ describe Chef::Provider::Group::Dscl do
     @provider.current_resource = @current_resource
 
     @status = double(stdout: "\n", stderr: "", exitstatus: 0)
-    allow(@provider).to receive(:shell_out).and_return(@status)
+    allow(@provider).to receive(:shell_out_compacted).and_return(@status)
   end
 
   it "should run shell_out with the supplied array of arguments appended to the dscl command" do
-    expect(@provider).to receive(:shell_out).with("dscl", ".", "-cmd", "/Path", "arg1", "arg2")
+    expect(@provider).to receive(:shell_out_compacted).with("dscl", ".", "-cmd", "/Path", "arg1", "arg2")
     @provider.dscl("cmd", "/Path", "arg1", "arg2")
   end
 
@@ -116,12 +116,12 @@ describe Chef::Provider::Group::Dscl do
 
   describe "gid_used?" do
     before do
-      allow(@provider).to receive(:safe_dscl).and_return(<<-eos
+      allow(@provider).to receive(:safe_dscl).and_return(<<-EOS
         someprogram		somethingElse:gid = (
             500
         )
-        eos
-      )
+      EOS
+                                                        )
     end
 
     it "should run safe_dscl with search /Groups gid" do
@@ -309,20 +309,20 @@ describe "Test DSCL loading" do
     @new_resource = Chef::Resource::Group.new("group name aj")
     @new_resource.group_name("aj")
     @provider = Chef::Provider::Group::Dscl.new(@new_resource, @run_context)
-    @output = <<-EOF
-AppleMetaNodeLocation: /Local/Default
-Comment:
- Test Group
-GeneratedUID: AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA
-NestedGroups: AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAB
-Password: *
-PrimaryGroupID: 999
-RealName:
- TestGroup
-RecordName: com.apple.aj
-RecordType: dsRecTypeStandard:Groups
-GroupMembership: waka bar
-EOF
+    @output = <<~EOF
+      AppleMetaNodeLocation: /Local/Default
+      Comment:
+       Test Group
+      GeneratedUID: AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA
+      NestedGroups: AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAB
+      Password: *
+      PrimaryGroupID: 999
+      RealName:
+       TestGroup
+      RecordName: com.apple.aj
+      RecordType: dsRecTypeStandard:Groups
+      GroupMembership: waka bar
+    EOF
     allow(@provider).to receive(:safe_dscl).with(*"read /Groups/aj".split(" ")).and_return(@output)
     @current_resource = @provider.load_current_resource
 

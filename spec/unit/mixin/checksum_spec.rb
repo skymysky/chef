@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2009-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,7 +29,7 @@ describe Chef::Mixin::Checksum do
     @checksum_user = Chef::CMCCheck.new
     @cache = Chef::Digester.instance
     @file = CHEF_SPEC_DATA + "/checksum/random.txt"
-    @stat = double("File::Stat", { :mtime => Time.at(0) })
+    @stat = double("File::Stat", { mtime: Time.at(0) })
     allow(File).to receive(:stat).and_return(@stat)
   end
 

@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Bryan McLellan <btm@loftninjas.org>
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,7 @@ describe Chef::Resource::ChefGem, "gem_binary" do
   end
 
   it "sets the gem_binary based on computing it from RbConfig" do
-    expect(resource.gem_binary).to eql("#{RbConfig::CONFIG['bindir']}/gem")
+    expect(resource.gem_binary).to eql("#{RbConfig::CONFIG["bindir"]}/gem")
   end
 
   it "sets compile_time to false by default" do
@@ -73,10 +73,7 @@ describe Chef::Resource::ChefGem, "gem_binary" do
       Chef::Recipe.new("hjk", "test", run_context)
     end
 
-    let(:chef_gem_compile_time) { nil }
-
     let(:resource) do
-      Chef::Config[:chef_gem_compile_time] = chef_gem_compile_time
       Chef::Resource::ChefGem.new("foo", run_context)
     end
 

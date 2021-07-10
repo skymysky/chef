@@ -1,6 +1,6 @@
 #
 # Author:: Deepali Jagtap
-# Copyright:: Copyright 2013-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,9 +16,9 @@
 # limitations under the License.
 #
 #
-require "chef/provider/package"
-require "chef/resource/package"
-require "chef/mixin/get_source_from_package"
+require_relative "../package"
+require_relative "../../resource/package"
+require_relative "../../mixin/get_source_from_package"
 
 class Chef
   class Provider
@@ -34,11 +34,11 @@ class Chef
           super
           requirements.assert(:install) do |a|
             a.assertion { new_resource.source }
-            a.failure_message Chef::Exceptions::Package, "Source for package #{new_resource.name} required for action install"
+            a.failure_message Chef::Exceptions::Package, "Source for package #{new_resource.package_name} required for action install"
           end
           requirements.assert(:all_actions) do |a|
             a.assertion { !new_resource.source || package_source_found? }
-            a.failure_message Chef::Exceptions::Package, "Package #{new_resource.name} not found: #{new_resource.source}"
+            a.failure_message Chef::Exceptions::Package, "Package #{new_resource.package_name} not found: #{new_resource.source}"
             a.whyrun "would assume #{new_resource.source} would be have previously been made available"
           end
         end
@@ -49,7 +49,7 @@ class Chef
 
           if package_source_found?
             logger.trace("#{new_resource} checking pkg status")
-            ret = shell_out_compact_timeout("installp", "-L", "-d", new_resource.source)
+            ret = shell_out("installp", "-L", "-d", new_resource.source)
             ret.stdout.each_line do |line|
               case line
               when /:#{new_resource.package_name}:/
@@ -65,7 +65,7 @@ class Chef
           end
 
           logger.trace("#{new_resource} checking install state")
-          ret = shell_out_compact_timeout("lslpp", "-lcq", current_resource.package_name)
+          ret = shell_out("lslpp", "-lcq", current_resource.package_name)
           ret.stdout.each_line do |line|
             case line
             when /#{current_resource.package_name}/
@@ -84,8 +84,9 @@ class Chef
 
         def candidate_version
           return @candidate_version if @candidate_version
+
           if package_source_found?
-            ret = shell_out_compact_timeout("installp", "-L", "-d", new_resource.source)
+            ret = shell_out("installp", "-L", "-d", new_resource.source)
             ret.stdout.each_line do |line|
               case line
               when /\w:#{Regexp.escape(new_resource.package_name)}:(.*)/
@@ -112,10 +113,10 @@ class Chef
         def install_package(name, version)
           logger.trace("#{new_resource} package install options: #{options}")
           if options.nil?
-            shell_out_compact_timeout!("installp", "-aYF", "-d", new_resource.source, new_resource.package_name)
+            shell_out!("installp", "-aYF", "-d", new_resource.source, new_resource.package_name)
             logger.trace("#{new_resource} installed version #{new_resource.version} from: #{new_resource.source}")
           else
-            shell_out_compact_timeout!("installp", "-aYF", options, "-d", new_resource.source, new_resource.package_name)
+            shell_out!("installp", "-aYF", options, "-d", new_resource.source, new_resource.package_name)
             logger.trace("#{new_resource} installed version #{new_resource.version} from: #{new_resource.source}")
           end
         end
@@ -124,10 +125,10 @@ class Chef
 
         def remove_package(name, version)
           if options.nil?
-            shell_out_compact_timeout!("installp", "-u", name)
+            shell_out!("installp", "-u", name)
             logger.trace("#{new_resource} removed version #{new_resource.version}")
           else
-            shell_out_compact_timeout!("installp", "-u", options, name)
+            shell_out!("installp", "-u", options, name)
             logger.trace("#{new_resource} removed version #{new_resource.version}")
           end
         end

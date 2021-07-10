@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/resource/service"
-require "chef/provider/service/init"
+require_relative "../../resource/service"
+require_relative "init"
 
 class Chef
   class Provider
@@ -67,7 +67,7 @@ class Chef
 
           requirements.assert(:all_actions) do |a|
             a.assertion { enabled_state_found }
-            # for consistentcy with original behavior, this will not fail in non-whyrun mode;
+            # for consistency with original behavior, this will not fail in non-whyrun mode;
             # rather it will silently set enabled state=>false
             a.whyrun "Unable to determine enabled/disabled state, assuming this will be correct for an actual run.  Assuming disabled."
           end
@@ -83,7 +83,7 @@ class Chef
           if new_resource.start_command
             super
           else
-            shell_out_with_systems_locale!("#{init_command} faststart")
+            shell_out!("#{init_command} faststart", default_env: false)
           end
         end
 
@@ -91,7 +91,7 @@ class Chef
           if new_resource.stop_command
             super
           else
-            shell_out_with_systems_locale!("#{init_command} faststop")
+            shell_out!("#{init_command} faststop", default_env: false)
           end
         end
 
@@ -99,7 +99,7 @@ class Chef
           if new_resource.restart_command
             super
           elsif supports[:restart]
-            shell_out_with_systems_locale!("#{init_command} fastrestart")
+            shell_out!("#{init_command} fastrestart", default_env: false)
           else
             stop_service
             sleep 1
@@ -118,7 +118,7 @@ class Chef
         private
 
         def read_rc_conf
-          ::File.open("/etc/rc.conf", "r") { |file| file.readlines }
+          ::File.open("/etc/rc.conf", "r", &:readlines)
         end
 
         def write_rc_conf(lines)
@@ -130,27 +130,21 @@ class Chef
         # The variable name used in /etc/rc.conf for enabling this service
         def service_enable_variable_name
           @service_enable_variable_name ||=
-            begin
-              # Look for name="foo" in the shell script @init_command. Use this for determining the variable name in /etc/rc.conf
-              # corresponding to this service
-              # For example: to enable the service mysql-server with the init command /usr/local/etc/rc.d/mysql-server, you need
-              # to set mysql_enable="YES" in /etc/rc.conf$
-              if init_command
-                ::File.open(init_command) do |rcscript|
-                  rcscript.each_line do |line|
-                    if line =~ /^name="?(\w+)"?/
-                      return $1 + "_enable"
-                    end
+            if init_command
+              ::File.open(init_command) do |rcscript|
+                rcscript.each_line do |line|
+                  if line =~ /^name="?(\w+)"?/
+                    return $1 + "_enable"
                   end
                 end
-                # some scripts support multiple instances through symlinks such as openvpn.
-                # We should get the service name from rcvar.
-                logger.trace("name=\"service\" not found at #{init_command}. falling back to rcvar")
-                shell_out!("#{init_command} rcvar").stdout[/(\w+_enable)=/, 1]
-              else
-                # for why-run mode when the rcd_script is not there yet
-                new_resource.service_name
               end
+              # some scripts support multiple instances through symlinks such as openvpn.
+              # We should get the service name from rcvar.
+              logger.trace("name=\"service\" not found at #{init_command}. falling back to rcvar")
+              shell_out!("#{init_command} rcvar").stdout[/(\w+_enable)=/, 1]
+            else
+              # for why-run mode when the rcd_script is not there yet
+              new_resource.service_name
             end
         end
 
@@ -161,9 +155,9 @@ class Chef
               case line
               when /^#{Regexp.escape(var_name)}="(\w+)"/
                 enabled_state_found!
-                if $1 =~ /^yes$/i
+                if $1.casecmp?("yes")
                   current_resource.enabled true
-                elsif $1 =~ /^(no|none)$/i
+                elsif $1.casecmp?("no") || $1.casecmp?("none")
                   current_resource.enabled false
                 end
               end
@@ -171,7 +165,7 @@ class Chef
           end
 
           if current_resource.enabled.nil?
-            logger.trace("#{new_resource.name} enable/disable state unknown")
+            logger.debug("#{new_resource.name} enable/disable state unknown")
             current_resource.enabled false
           end
         end

@@ -1,6 +1,6 @@
 #
 # Author:: Prabhu Das (<prabhu.das@clogeny.com>)
-# Copyright:: Copyright 2013-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,15 +17,15 @@
 #
 
 require "spec_helper"
-require "functional/resource/base"
 require "chef/mixin/shell_out"
 
 # run this test only for following platforms.
-exclude_test = !%w{aix rhel fedora suse}.include?(ohai[:platform_family])
-describe Chef::Resource::RpmPackage, :requires_root, :external => exclude_test do
+exclude_test = !%w{aix rhel fedora suse amazon}.include?(ohai[:platform_family])
+describe Chef::Resource::RpmPackage, :requires_root, external: exclude_test do
   include Chef::Mixin::ShellOut
 
   let(:new_resource) do
+    run_context = Chef::RunContext.new(Chef::Node.new, {}, Chef::EventDispatch::Dispatcher.new)
     new_resource = Chef::Resource::RpmPackage.new(@pkg_name, run_context)
     new_resource.source @pkg_path
     new_resource
@@ -39,7 +39,7 @@ describe Chef::Resource::RpmPackage, :requires_root, :external => exclude_test d
     # mytest rpm package works in centos, redhat and in suse without any dependency issues.
     else
       expect(shell_out("rpm -qa | grep mytest").exitstatus).to eq(0)
-      ::File.exists?("/opt/mytest/mytest.sh") # The mytest rpm package contains the mytest.sh file
+      ::File.exist?("/opt/mytest/mytest.sh") # The mytest rpm package contains the mytest.sh file
     end
   end
 
@@ -48,7 +48,7 @@ describe Chef::Resource::RpmPackage, :requires_root, :external => exclude_test d
       expect(shell_out("rpm -qa | grep dummy").exitstatus).to eq(1)
     else
       expect(shell_out("rpm -qa | grep mytest").exitstatus).to eq(1)
-      !::File.exists?("/opt/mytest/mytest.sh")
+      !::File.exist?("/opt/mytest/mytest.sh")
     end
   end
 

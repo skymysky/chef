@@ -1,6 +1,6 @@
 #
 # Author:: Doug MacEachern (<dougm@vmware.com>)
-# Copyright:: Copyright 2010-2016, VMware, Inc.
+# Copyright:: Copyright 2010-2019, VMware, Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +16,9 @@
 # limitations under the License.
 #
 
-require "chef/provider/user"
-require "chef/exceptions"
-if RUBY_PLATFORM =~ /mswin|mingw32|windows/
-  require "chef/util/windows/net_user"
-end
+require_relative "../user"
+require_relative "../../exceptions"
+require_relative "../../util/windows/net_user" if Chef::Platform.windows?
 
 class Chef
   class Provider
@@ -39,13 +37,13 @@ class Chef
             logger.warn("The 'gid' (or 'group') property is not implemented on the Windows platform. Please use the `members` property of the  'group' resource to assign a user to a group.")
           end
 
-          @current_resource = Chef::Resource::User.new(new_resource.name)
+          @current_resource = Chef::Resource::User::WindowsUser.new(new_resource.name)
           current_resource.username(new_resource.username)
           begin
             user_info = @net_user.get_info
-
             current_resource.uid(user_info[:user_id])
-            current_resource.comment(user_info[:full_name])
+            current_resource.full_name(user_info[:full_name])
+            current_resource.comment(user_info[:comment])
             current_resource.home(user_info[:home_dir])
             current_resource.shell(user_info[:script_path])
           rescue Chef::Exceptions::UserIDNotFound => e
@@ -63,13 +61,20 @@ class Chef
         # <true>:: If a change is required
         # <false>:: If the users are identical
         def compare_user
-          unless @net_user.validate_credentials(new_resource.password)
-            logger.trace("#{new_resource} password has changed")
-            return true
+          @change_desc = []
+          if new_resource.password && !@net_user.validate_credentials(new_resource.password)
+            @change_desc << "update password"
           end
-          [ :uid, :comment, :home, :shell ].any? do |user_attrib|
-            !new_resource.send(user_attrib).nil? && new_resource.send(user_attrib) != current_resource.send(user_attrib)
+
+          %i{uid comment home shell full_name}.any? do |user_attrib|
+            new_val = new_resource.send(user_attrib)
+            cur_val = current_resource.send(user_attrib)
+            if !new_val.nil? && new_val != cur_val
+              @change_desc << "change #{user_attrib} from #{cur_val} to #{new_val}"
+            end
           end
+
+          !@change_desc.empty?
         end
 
         def create_user
@@ -100,7 +105,8 @@ class Chef
           opts = { name: new_resource.username }
 
           field_list = {
-            "comment" => "full_name",
+            "full_name" => "full_name",
+            "comment" => "comment",
             "home" => "home_dir",
             "uid" => "user_id",
             "shell" => "script_path",
@@ -111,6 +117,7 @@ class Chef
             field_symbol = field.to_sym
             next unless current_resource.send(field_symbol) != new_resource.send(field_symbol)
             next unless new_resource.send(field_symbol)
+
             unless field_symbol == :password
               logger.trace("#{new_resource} setting #{field} to #{new_resource.send(field_symbol)}")
             end

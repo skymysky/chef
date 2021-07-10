@@ -1,5 +1,5 @@
 #--
-# Copyright:: Copyright 2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,8 @@
 # limitations under the License.
 #
 
-require "chef/server_api_versions"
-require "chef/json_compat"
+require_relative "../server_api_versions"
+require_relative "../json_compat"
 
 class Chef
   class HTTP
@@ -24,8 +24,7 @@ class Chef
     # and maximum supported API versions.
     class APIVersions
 
-      def initialize(options = {})
-      end
+      def initialize(options = {}); end
 
       def handle_request(method, url, headers = {}, data = false)
         [method, url, headers, data]

@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,14 +16,15 @@
 # limitations under the License.
 #
 
-require "chef/provider"
-require "etc"
+require_relative "../provider"
+require "etc" unless defined?(Etc)
 
 class Chef
   class Provider
     class User < Chef::Provider
 
       attr_accessor :user_exists, :locked
+      attr_accessor :change_desc
 
       def initialize(new_resource, run_context)
         super
@@ -34,7 +35,7 @@ class Chef
       end
 
       def convert_group_name
-        if new_resource.gid.is_a? String
+        if new_resource.gid.is_a?(String) && new_resource.gid.to_i == 0
           new_resource.gid(Etc.getgrnam(new_resource.gid).gid)
         end
       rescue ArgumentError
@@ -107,72 +108,82 @@ class Chef
       # <true>:: If a change is required
       # <false>:: If the users are identical
       def compare_user
-        return true if !new_resource.home.nil? && Pathname.new(new_resource.home).cleanpath != Pathname.new(current_resource.home).cleanpath
-
-        [ :comment, :shell, :password, :uid, :gid ].each do |user_attrib|
-          return true if !new_resource.send(user_attrib).nil? && new_resource.send(user_attrib).to_s != current_resource.send(user_attrib).to_s
+        @change_desc = []
+        if !new_resource.home.nil? && Pathname.new(new_resource.home).cleanpath != Pathname.new(current_resource.home).cleanpath
+          @change_desc << "change homedir from #{current_resource.home} to #{new_resource.home}"
         end
 
-        false
+        %i{comment shell password uid gid}.each do |user_attrib|
+          new_val = new_resource.send(user_attrib)
+          cur_val = current_resource.send(user_attrib)
+          if !new_val.nil? && new_val.to_s != cur_val.to_s
+            @change_desc << "change #{user_attrib} from #{cur_val} to #{new_val}"
+          end
+        end
+
+        !@change_desc.empty?
       end
 
-      def action_create
+      action :create do
         if !@user_exists
           converge_by("create user #{new_resource.username}") do
             create_user
             logger.info("#{new_resource} created")
           end
         elsif compare_user
-          converge_by("alter user #{new_resource.username}") do
+          converge_by(["alter user #{new_resource.username}"] + change_desc) do
             manage_user
-            logger.info("#{new_resource} altered")
+            logger.info("#{new_resource} altered, #{change_desc.join(", ")}")
           end
         end
       end
 
-      def action_remove
+      action :remove do
         return unless @user_exists
+
         converge_by("remove user #{new_resource.username}") do
           remove_user
           logger.info("#{new_resource} removed")
         end
       end
 
-      def action_manage
+      action :manage do
         return unless @user_exists && compare_user
-        converge_by("manage user #{new_resource.username}") do
+
+        converge_by(["manage user #{new_resource.username}"] + change_desc) do
           manage_user
-          logger.info("#{new_resource} managed")
+          logger.info("#{new_resource} managed: #{change_desc.join(", ")}")
         end
       end
 
-      def action_modify
+      action :modify do
         return unless compare_user
-        converge_by("modify user #{new_resource.username}") do
+
+        converge_by(["modify user #{new_resource.username}"] + change_desc) do
           manage_user
-          logger.info("#{new_resource} modified")
+          logger.info("#{new_resource} modified: #{change_desc.join(", ")}")
         end
       end
 
-      def action_lock
+      action :lock do
         if check_lock == false
           converge_by("lock the user #{new_resource.username}") do
             lock_user
             logger.info("#{new_resource} locked")
           end
         else
-          logger.trace("#{new_resource} already locked - nothing to do")
+          logger.debug("#{new_resource} already locked - nothing to do")
         end
       end
 
-      def action_unlock
+      action :unlock do
         if check_lock == true
           converge_by("unlock user #{new_resource.username}") do
             unlock_user
             logger.info("#{new_resource} unlocked")
           end
         else
-          logger.trace("#{new_resource} already unlocked - nothing to do")
+          logger.debug("#{new_resource} already unlocked - nothing to do")
         end
       end
 
@@ -213,6 +224,7 @@ class Chef
       def updating_home?
         return false if new_resource.home.nil?
         return true if current_resource.home.nil?
+
         # Pathname#cleanpath matches more edge conditions than File.expand_path()
         new_resource.home && Pathname.new(current_resource.home).cleanpath != Pathname.new(new_resource.home).cleanpath
       end

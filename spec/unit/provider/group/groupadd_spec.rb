@@ -1,6 +1,6 @@
 #
 # Author:: AJ Christensen (<aj@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,23 +49,23 @@ describe Chef::Provider::Group::Groupadd do
       gid: "-g",
     }
 
-    field_list.each do |attribute, option|
-      it "should check for differences in #{attribute} between the current and new resources" do
-        expect(new_resource).to receive(attribute)
-        expect(current_resource).to receive(attribute)
+    field_list.each do |property, option|
+      it "should check for differences in #{property} between the current and new resources" do
+        expect(new_resource).to receive(property)
+        expect(current_resource).to receive(property)
         provider.set_options
       end
 
-      it "should set the option for #{attribute} if the new resources #{attribute} is not null" do
-        allow(new_resource).to receive(attribute).and_return("wowaweea")
-        expect(provider.set_options).to eql([ option, new_resource.send(attribute), new_resource.group_name])
+      it "should set the option for #{property} if the new resources #{property} is not null" do
+        allow(new_resource).to receive(property).and_return("cactus")
+        expect(provider.set_options).to eql([ option, new_resource.send(property), new_resource.group_name])
       end
     end
 
     it "should combine all the possible options" do
       match_array = []
-      field_list.sort_by { |a| a[0] }.each do |attribute, option|
-        allow(new_resource).to receive(attribute).and_return("hola")
+      field_list.sort_by { |a| a[0] }.each do |property, option|
+        allow(new_resource).to receive(property).and_return("hola")
         match_array << option
         match_array << "hola"
       end
@@ -108,14 +108,14 @@ describe Chef::Provider::Group::Groupadd do
 
   describe "#create_group" do
     before do
-      allow(provider).to receive(:shell_out!).and_return(true)
+      allow(provider).to receive(:shell_out_compacted!).and_return(true)
       allow(provider).to receive(:set_options).and_return("monkey")
       allow(provider).to receive(:groupadd_options).and_return([])
       allow(provider).to receive(:modify_group_members).and_return(true)
     end
 
     it "should run groupadd with the return of set_options" do
-      expect(provider).to receive(:shell_out!).with("groupadd", "monkey").and_return(true)
+      expect(provider).to receive(:shell_out_compacted!).with("groupadd", "monkey").and_return(true)
       provider.create_group
     end
 
@@ -127,13 +127,13 @@ describe Chef::Provider::Group::Groupadd do
 
   describe "#manage_group" do
     before do
-      allow(provider).to receive(:shell_out!).and_return(true)
+      allow(provider).to receive(:shell_out_compacted!).and_return(true)
       allow(provider).to receive(:set_options).and_return("monkey")
     end
 
     it "should run groupmod with the return of set_options" do
       allow(provider).to receive(:modify_group_members).and_return(true)
-      expect(provider).to receive(:shell_out!).with("groupmod", "monkey").and_return(true)
+      expect(provider).to receive(:shell_out_compacted!).with("groupmod", "monkey").and_return(true)
       provider.manage_group
     end
 
@@ -145,17 +145,17 @@ describe Chef::Provider::Group::Groupadd do
 
   describe "#remove_group" do
     before do
-      allow(provider).to receive(:shell_out!).and_return(true)
+      allow(provider).to receive(:shell_out_compacted!).and_return(true)
       allow(provider).to receive(:set_options).and_return("monkey")
     end
 
     it "should run groupdel with the new resources group name" do
-      expect(provider).to receive(:shell_out!).with("groupdel", "aj").and_return(true)
+      expect(provider).to receive(:shell_out_compacted!).with("groupdel", "aj").and_return(true)
       provider.remove_group
     end
   end
 
-  [:add_member, :remove_member, :set_members].each do |m|
+  %i{add_member remove_member set_members}.each do |m|
     it "should raise an error when calling #{m}" do
       expect { provider.send(m, [ ]) }.to raise_error(Chef::Exceptions::Group, "you must override #{m} in #{provider}")
     end
@@ -163,7 +163,7 @@ describe Chef::Provider::Group::Groupadd do
 
   describe "#load_current_resource" do
     before do
-      allow(provider).to receive(:shell_out!).and_return(true)
+      allow(provider).to receive(:shell_out_compacted!).and_return(true)
       allow(provider).to receive(:set_options).and_return("monkey")
     end
 

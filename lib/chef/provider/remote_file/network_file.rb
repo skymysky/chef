@@ -16,10 +16,10 @@
 # limitations under the License.
 #
 
-require "uri"
-require "tempfile"
-require "chef/provider/remote_file"
-require "chef/mixin/user_context"
+require "uri" unless defined?(URI)
+require "tempfile" unless defined?(Tempfile)
+require_relative "../remote_file"
+require_relative "../../mixin/user_context"
 
 class Chef
   class Provider

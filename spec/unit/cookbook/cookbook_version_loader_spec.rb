@@ -1,6 +1,6 @@
 #
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2014-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@ require "spec_helper"
 
 describe Chef::Cookbook::CookbookVersionLoader do
   before do
-    allow(ChefConfig).to receive(:windows?) { false }
+    allow(ChefUtils).to receive(:windows?) { false }
   end
 
   describe "loading a cookbook" do
@@ -124,8 +124,9 @@ describe Chef::Cookbook::CookbookVersionLoader do
         expect { cookbook_loader.load! }.to raise_error(Chef::Exceptions::CookbookNotFoundInRepo)
       end
 
-      it "skips the cookbook when called with #load" do
-        expect { cookbook_loader.load }.to_not raise_error
+      it "gives deprecation warning called with #load" do
+        Chef::Config[:treat_deprecation_warnings_as_errors] = false
+        cookbook_loader.load
       end
 
     end
@@ -148,7 +149,8 @@ describe Chef::Cookbook::CookbookVersionLoader do
         expect { cookbook_loader.load! }.to raise_error("THIS METADATA HAS A BUG")
       end
 
-      it "raises an error when called with #load" do
+      it "gives deprecation warning to us load!  when called with #load and raises error" do
+        Chef::Config[:treat_deprecation_warnings_as_errors] = false
         expect { cookbook_loader.load }.to raise_error("THIS METADATA HAS A BUG")
       end
 
@@ -173,14 +175,15 @@ describe Chef::Cookbook::CookbookVersionLoader do
       let(:cookbook_path) { File.join(CHEF_SPEC_DATA, "incomplete-metadata-chef-repo/incomplete-metadata") }
 
       let(:error_message) do
-        "Cookbook loaded at path(s) [#{cookbook_path}] has invalid metadata: The `name' attribute is required in cookbook metadata"
+        "Cookbook loaded at path [#{cookbook_path}] has invalid metadata: The `name' attribute is required in cookbook metadata"
       end
 
       it "raises an error when loading with #load!" do
         expect { cookbook_loader.load! }.to raise_error(Chef::Exceptions::MetadataNotValid, error_message)
       end
 
-      it "raises an error when called with #load" do
+      it "gives deprecation warning to use load! method when called with #load and raises error for invalid metadata" do
+        Chef::Config[:treat_deprecation_warnings_as_errors] = false
         expect { cookbook_loader.load }.to raise_error(Chef::Exceptions::MetadataNotValid, error_message)
       end
 

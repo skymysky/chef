@@ -1,6 +1,6 @@
 #
 # Author:: Lamont Granquist (<lamont@chef.io>)
-# Copyright:: Copyright 2015-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,13 +26,12 @@
 # injected" into this class by other objects and do not reference the class symbols in those files
 # directly and we do not need to require those files here.
 
-require "chef/platform/provider_priority_map"
-require "chef/platform/resource_priority_map"
-require "chef/platform/provider_handler_map"
-require "chef/platform/resource_handler_map"
-require "chef/deprecated"
-require "chef/event_dispatch/dsl"
-require "chef/deprecated"
+require_relative "platform/provider_priority_map"
+require_relative "platform/resource_priority_map"
+require_relative "platform/provider_handler_map"
+require_relative "platform/resource_handler_map"
+require_relative "deprecated"
+require_relative "event_dispatch/dsl"
 
 class Chef
   class << self
@@ -97,8 +96,8 @@ class Chef
     #
     # @return [Array<Class>] Modified Priority Array of Provider Classes to use for the resource_name on the node
     #
-    def set_provider_priority_array(resource_name, priority_array, *filter, &block)
-      result = provider_priority_map.set_priority_array(resource_name.to_sym, priority_array, *filter, &block)
+    def set_provider_priority_array(resource_name, priority_array, **filter, &block)
+      result = provider_priority_map.set_priority_array(resource_name.to_sym, priority_array, **filter, &block)
       result = result.dup if result
       result
     end
@@ -112,8 +111,8 @@ class Chef
     #
     # @return [Array<Class>] Modified Priority Array of Resource Classes to use for the resource_name on the node
     #
-    def set_resource_priority_array(resource_name, priority_array, *filter, &block)
-      result = resource_priority_map.set_priority_array(resource_name.to_sym, priority_array, *filter, &block)
+    def set_resource_priority_array(resource_name, priority_array, **filter, &block)
+      result = resource_priority_map.set_priority_array(resource_name.to_sym, priority_array, **filter, &block)
       result = result.dup if result
       result
     end
@@ -200,13 +199,14 @@ class Chef
     #
     # Emit a deprecation message.
     #
-    # @param [Symbol] type The message to send. This should refer to a class
+    # @param type [Symbol] The message to send. This should refer to a class
     #   defined in Chef::Deprecated
-    # @param message  An explicit message to display, rather than the generic one
-    #   associated with the deprecation.
-    # @param location The location. Defaults to the caller who called you (since
-    #   generally the person who triggered the check is the one that needs to be
-    #   fixed).
+    # @param message [String, nil] An explicit message to display, rather than
+    #   the generic one associated with the deprecation.
+    # @param location [String, nil] The location. Defaults to the caller who
+    #   called you (since generally the person who triggered the check is the one
+    #   that needs to be fixed).
+    # @return [void]
     #
     # @example
     #     Chef.deprecated(:my_deprecation, message: "This is deprecated!")
@@ -220,20 +220,22 @@ class Chef
       # run. If we are not yet in a run, print to `Chef::Log`.
       if run_context && run_context.events
         run_context.events.deprecation(deprecation, location)
-      else
-        Chef::Log.deprecation(deprecation, location)
+      elsif !deprecation.silenced?
+        Chef::Log.deprecation(deprecation.to_s)
       end
     end
 
+    # Log a generic deprecation warning that doesn't have a specific class in
+    # Chef::Deprecated.
+    #
+    # This should generally not be used, as the user will not be given a link
+    # to get more information on fixing the deprecation warning.
+    #
+    # @see #deprecated
     def log_deprecation(message, location = nil)
       location ||= Chef::Log.caller_location
       Chef.deprecated(:generic, message, location)
     end
-  end
-
-  # @api private Only for test dependency injection; not evenly implemented as yet.
-  def self.path_to(path)
-    path
   end
 
   reset!

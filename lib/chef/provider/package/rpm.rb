@@ -1,6 +1,6 @@
 #
 # Author:: Joshua Timberman (<joshua@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,10 +15,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-require "chef/provider/package"
-require "chef/resource/package"
-require "chef/mixin/get_source_from_package"
-require "chef/provider/package/yum/rpm_utils"
+require_relative "../package"
+require_relative "../../resource/package"
+require_relative "../../mixin/get_source_from_package"
+require_relative "yum/rpm_utils"
 
 class Chef
   class Provider
@@ -33,13 +33,13 @@ class Chef
 
           requirements.assert(:all_actions) do |a|
             a.assertion { @package_source_exists }
-            a.failure_message Chef::Exceptions::Package, "Package #{new_resource.name} not found: #{new_resource.source}"
-            a.whyrun "Assuming package #{new_resource.name} would have been made available."
+            a.failure_message Chef::Exceptions::Package, "Package #{new_resource.package_name} not found: #{new_resource.source}"
+            a.whyrun "Assuming package #{new_resource.package_name} would have been made available."
           end
           requirements.assert(:all_actions) do |a|
             a.assertion { !@rpm_status.nil? && (@rpm_status.exitstatus == 0 || @rpm_status.exitstatus == 1) }
             a.failure_message Chef::Exceptions::Package, "Unable to determine current version due to RPM failure. Detail: #{@rpm_status.inspect}"
-            a.whyrun "Assuming current version would have been determined for package#{new_resource.name}."
+            a.whyrun "Assuming current version would have been determined for package #{new_resource.package_name}."
           end
         end
 
@@ -57,7 +57,7 @@ class Chef
             end
 
             logger.trace("#{new_resource} checking rpm status")
-            shell_out_compact_timeout!("rpm", "-qp", "--queryformat", "%{NAME} %{VERSION}-%{RELEASE}\n", new_resource.source).stdout.each_line do |line|
+            shell_out!("rpm", "-qp", "--queryformat", "%{NAME} %{VERSION}-%{RELEASE}\n", new_resource.source).stdout.each_line do |line|
               case line
               when /^(\S+)\s(\S+)$/
                 current_resource.package_name($1)
@@ -73,7 +73,7 @@ class Chef
           end
 
           logger.trace("#{new_resource} checking install state")
-          @rpm_status = shell_out_compact_timeout("rpm", "-q", "--queryformat", "%{NAME} %{VERSION}-%{RELEASE}\n", current_resource.package_name)
+          @rpm_status = shell_out("rpm", "-q", "--queryformat", "%{NAME} %{VERSION}-%{RELEASE}\n", current_resource.package_name)
           @rpm_status.stdout.each_line do |line|
             case line
             when /^(\S+)\s(\S+)$/
@@ -88,12 +88,12 @@ class Chef
         def install_package(name, version)
           if current_resource.version
             if allow_downgrade
-              shell_out_compact_timeout!("rpm", options, "-U", "--oldpackage", new_resource.source)
+              shell_out!("rpm", options, "-U", "--oldpackage", new_resource.source)
             else
-              shell_out_compact_timeout!("rpm", options, "-U", new_resource.source)
+              shell_out!("rpm", options, "-U", new_resource.source)
             end
           else
-            shell_out_compact_timeout!("rpm", options, "-i", new_resource.source)
+            shell_out!("rpm", options, "-i", new_resource.source)
           end
         end
 
@@ -101,9 +101,9 @@ class Chef
 
         def remove_package(name, version)
           if version
-            shell_out_compact_timeout!("rpm", options, "-e", "#{name}-#{version}")
+            shell_out!("rpm", options, "-e", "#{name}-#{version}")
           else
-            shell_out_compact_timeout!("rpm", options, "-e", name)
+            shell_out!("rpm", options, "-e", name)
           end
         end
 
@@ -116,6 +116,7 @@ class Chef
         def uri_scheme?(str)
           scheme = URI.split(str).first
           return false unless scheme
+
           %w{http https ftp file}.include?(scheme.downcase)
         rescue URI::InvalidURIError
           false

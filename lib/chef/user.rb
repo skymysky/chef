@@ -1,6 +1,6 @@
 #
 # Author:: Steven Danna (steve@chef.io)
-# Copyright:: Copyright 2012-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,13 +15,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-require "chef/config"
-require "chef/mixin/params_validate"
-require "chef/mixin/from_file"
-require "chef/mash"
-require "chef/json_compat"
-require "chef/search/query"
-require "chef/server_api"
+require_relative "config"
+require_relative "mixin/params_validate"
+require_relative "mixin/from_file"
+require_relative "mash"
+require_relative "json_compat"
+require_relative "search/query"
+require_relative "server_api"
 
 # TODO
 # DEPRECATION NOTE
@@ -36,7 +36,6 @@ require "chef/server_api"
 # should be removed once client support for Open Source Chef Server 11 expires.
 class Chef
   class User
-
     include Chef::Mixin::FromFile
     include Chef::Mixin::ParamsValidate
 
@@ -49,35 +48,35 @@ class Chef
     end
 
     def chef_rest_v0
-      @chef_rest_v0 ||= Chef::ServerAPI.new(Chef::Config[:chef_server_url], { :api_version => "0" })
+      @chef_rest_v0 ||= Chef::ServerAPI.new(Chef::Config[:chef_server_url], { api_version: "0" })
     end
 
     def name(arg = nil)
       set_or_return(:name, arg,
-                    :regex => /^[a-z0-9\-_]+$/)
+        regex: /^[a-z0-9\-_]+$/)
     end
 
     def admin(arg = nil)
       set_or_return(:admin,
-                    arg, :kind_of => [TrueClass, FalseClass])
+        arg, kind_of: [TrueClass, FalseClass])
     end
 
     def public_key(arg = nil)
       set_or_return(:public_key,
-                    arg, :kind_of => String)
+        arg, kind_of: String)
     end
 
     def private_key(arg = nil)
       set_or_return(:private_key,
-                    arg, :kind_of => String)
+        arg, kind_of: String)
     end
 
     def password(arg = nil)
       set_or_return(:password,
-                    arg, :kind_of => String)
+        arg, kind_of: String)
     end
 
-    def to_hash
+    def to_h
       result = {
         "name" => @name,
         "public_key" => @public_key,
@@ -88,8 +87,10 @@ class Chef
       result
     end
 
+    alias_method :to_hash, :to_h
+
     def to_json(*a)
-      Chef::JSONCompat.to_json(to_hash, *a)
+      Chef::JSONCompat.to_json(to_h, *a)
     end
 
     def destroy
@@ -97,23 +98,23 @@ class Chef
     end
 
     def create
-      payload = { :name => name, :admin => admin, :password => password }
+      payload = { name: name, admin: admin, password: password }
       payload[:public_key] = public_key if public_key
       new_user = chef_rest_v0.post("users", payload)
-      Chef::User.from_hash(to_hash.merge(new_user))
+      Chef::User.from_hash(to_h.merge(new_user))
     end
 
     def update(new_key = false)
-      payload = { :name => name, :admin => admin }
+      payload = { name: name, admin: admin }
       payload[:private_key] = new_key if new_key
       payload[:password] = password if password
       updated_user = chef_rest_v0.put("users/#{name}", payload)
-      Chef::User.from_hash(to_hash.merge(updated_user))
+      Chef::User.from_hash(to_h.merge(updated_user))
     end
 
     def save(new_key = false)
       create
-    rescue Net::HTTPServerException => e
+    rescue Net::HTTPClientException => e
       if e.response.code == "409"
         update(new_key)
       else
@@ -122,7 +123,7 @@ class Chef
     end
 
     def reregister
-      reregistered_self = chef_rest_v0.put("users/#{name}", { :name => name, :admin => admin, :private_key => true })
+      reregistered_self = chef_rest_v0.put("users/#{name}", { name: name, admin: admin, private_key: true })
       private_key(reregistered_self["private_key"])
       self
     end
@@ -153,7 +154,7 @@ class Chef
     end
 
     def self.list(inflate = false)
-      response = Chef::ServerAPI.new(Chef::Config[:chef_server_url], { :api_version => "0" }).get("users")
+      response = Chef::ServerAPI.new(Chef::Config[:chef_server_url], { api_version: "0" }).get("users")
       users = if response.is_a?(Array)
                 transform_ohc_list_response(response) # OHC/OPC
               else
@@ -170,7 +171,7 @@ class Chef
     end
 
     def self.load(name)
-      response = Chef::ServerAPI.new(Chef::Config[:chef_server_url], { :api_version => "0" }).get("users/#{name}")
+      response = Chef::ServerAPI.new(Chef::Config[:chef_server_url], { api_version: "0" }).get("users/#{name}")
       Chef::User.from_hash(response)
     end
 
@@ -179,7 +180,7 @@ class Chef
     # into the form
     # { "USERNAME" => "URI" }
     def self.transform_ohc_list_response(response)
-      new_response = Hash.new
+      new_response = {}
       response.each do |u|
         name = u["user"]["username"]
         new_response[name] = Chef::Config[:chef_server_url] + "/users/#{name}"

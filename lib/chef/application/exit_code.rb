@@ -1,6 +1,6 @@
 #
 # Author:: Steven Murawski (<smurawski@chef.io>)
-# Copyright:: Copyright 2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,7 @@ class Chef
     # These are the exit codes defined in Chef RFC 062
     # https://github.com/chef/chef-rfc/blob/master/rfc062-exit-status.md
     class ExitCode
+      require "chef-utils/dist" unless defined?(ChefUtils::Dist)
 
       # -1 is defined as DEPRECATED_FAILURE in RFC 062, so it is
       # not enumerated in an active constant.
@@ -34,13 +35,14 @@ class Chef
         REBOOT_SCHEDULED: 35,
         REBOOT_NEEDED: 37,
         REBOOT_FAILED: 41,
-        AUDIT_MODE_FAILURE: 42,
+        # 42 was used by audit mode and should not be reused
+        CONFIG_FAILURE: 43,
         CLIENT_UPGRADED: 213,
-      }
+      }.freeze
 
       DEPRECATED_RFC_062_EXIT_CODES = {
         DEPRECATED_FAILURE: -1,
-      }
+      }.freeze
 
       class << self
 
@@ -78,8 +80,8 @@ class Chef
             VALID_RFC_062_EXIT_CODES[:REBOOT_NEEDED]
           elsif reboot_failed?(exception)
             VALID_RFC_062_EXIT_CODES[:REBOOT_FAILED]
-          elsif audit_failure?(exception)
-            VALID_RFC_062_EXIT_CODES[:AUDIT_MODE_FAILURE]
+          elsif configuration_failure?(exception)
+            VALID_RFC_062_EXIT_CODES[:CONFIG_FAILURE]
           elsif client_upgraded?(exception)
             VALID_RFC_062_EXIT_CODES[:CLIENT_UPGRADED]
           else
@@ -105,9 +107,9 @@ class Chef
           end
         end
 
-        def audit_failure?(exception)
+        def configuration_failure?(exception)
           resolve_exception_array(exception).any? do |e|
-            e.is_a? Chef::Exceptions::AuditError
+            e.is_a? Chef::Exceptions::ConfigurationError
           end
         end
 
@@ -146,15 +148,15 @@ class Chef
         def notify_on_deprecation(message)
           Chef.deprecated(:exit_code, message)
         rescue Chef::Exceptions::DeprecatedFeatureError
-            # Have to rescue this, otherwise this unhandled error preempts
-            # the current exit code assignment.
+          # Have to rescue this, otherwise this unhandled error preempts
+          # the current exit code assignment.
         end
 
         def non_standard_exit_code_warning(exit_code)
-          "Chef attempted to exit with a non-standard exit code of #{exit_code}." \
-          " Chef RFC 062 (https://github.com/chef/chef-rfc/blob/master/rfc062-exit-status.md) defines the" \
-          " exit codes that should be used with Chef.  Chef::Application::ExitCode defines valid exit codes"  \
-          " Non-standard exit codes are redefined as GENERIC_FAILURE."
+          "#{ChefUtils::Dist::Infra::CLIENT} attempted to exit with a non-standard exit code of #{exit_code}." \
+          " The #{ChefUtils::Dist::Infra::PRODUCT} Exit Codes design document (https://github.com/chef/chef-rfc/blob/master/rfc062-exit-status.md)" \
+          " defines the exit codes that should be used with #{ChefUtils::Dist::Infra::CLIENT}. Chef::Application::ExitCode defines"  \
+          " valid exit codes Non-standard exit codes are redefined as GENERIC_FAILURE."
         end
 
       end

@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,10 +19,10 @@
 require "spec_helper"
 
 describe Chef::CookbookVersion do
-  COOKBOOK_PATH = File.expand_path(File.join(File.dirname(__FILE__), "..", "data", "cookbooks", "openldap"))
+  COOKBOOK_PATH = File.expand_path(File.join(__dir__, "..", "data", "cookbooks", "openldap"))
 
   before(:each) do
-    @cookbook_repo = File.expand_path(File.join(File.dirname(__FILE__), "..", "data", "cookbooks"))
+    @cookbook_repo = File.expand_path(File.join(__dir__, "..", "data", "cookbooks"))
     cl = Chef::CookbookLoader.new(@cookbook_repo)
     cl.load_cookbooks
     @cookbook_collection = Chef::CookbookCollection.new(cl)

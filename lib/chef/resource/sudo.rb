@@ -4,7 +4,7 @@
 #
 # Copyright:: 2011-2018, Bryan w. Berry
 # Copyright:: 2012-2018, Seth Vargo
-# Copyright:: 2015-2018, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,99 +19,127 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "chef/resource"
+require_relative "../resource"
 
 class Chef
   class Resource
     class Sudo < Chef::Resource
-      resource_name :sudo
+      unified_mode true
+
       provides(:sudo) { true }
 
-      description "Use the sudo resource to add or remove individual sudo entries using sudoers.d files."\
+      description "Use the **sudo** resource to add or remove individual sudo entries using sudoers.d files."\
                   " Sudo version 1.7.2 or newer is required to use the sudo resource, as it relies on the"\
-                  " '#includedir' directive introduced in version 1.7.2. This resource does not enforce"\
-                  " installation of the required sudo version. Supported releases of Ubuntu, SuSE, Debian,"\
+                  " `#includedir` directive introduced in version 1.7.2. This resource does not enforce"\
+                  " installation of the required sudo version. Chef-supported releases of Ubuntu, SuSE, Debian,"\
                   " and RHEL (6+) all support this feature."
       introduced "14.0"
+      examples <<~DOC
+      **Grant a user sudo privileges for any command**
 
-      # acording to the sudo man pages sudo will ignore files in an include dir that have a `.` or `~`
+      ```ruby
+      sudo 'admin' do
+        user 'admin'
+      end
+      ```
+
+      **Grant a user and groups sudo privileges for any command**
+
+      ```ruby
+      sudo 'admins' do
+        users 'bob'
+        groups 'sysadmins, superusers'
+      end
+      ```
+
+      **Grant passwordless sudo privileges for specific commands**
+
+      ```ruby
+      sudo 'passwordless-access' do
+        commands ['/bin/systemctl restart httpd', '/bin/systemctl restart mysql']
+        nopasswd true
+      end
+      ```
+      DOC
+
+      # According to the sudo man pages sudo will ignore files in an include dir that have a `.` or `~`
       # We convert either to `__`
       property :filename, String,
-               description: "The name of the sudoers.d file",
-               name_property: true,
-               coerce: proc { |x| x.gsub(/[\.~]/, "__") }
+        description: "The name of the sudoers.d file if it differs from the name of the resource block",
+        name_property: true,
+        coerce: proc { |x| x.gsub(/[\.~]/, "__") }
 
       property :users, [String, Array],
-               description: "User(s) to provide sudo privileges to. This accepts either an array or a comma separated.",
-               default: lazy { [] },
-               coerce: proc { |x| x.is_a?(Array) ? x : x.split(/\s*,\s*/) }
+        description: "User(s) to provide sudo privileges to. This property accepts either an array or a comma separated list.",
+        default: [],
+        coerce: proc { |x| x.is_a?(Array) ? x : x.split(/\s*,\s*/) }
 
       property :groups, [String, Array],
-               description: "Group(s) to provide sudo privileges to. This accepts either an array or a comma separated list. Leading % on group names is optional.",
-               default: lazy { [] },
-               coerce: proc { |x| coerce_groups(x) }
+        description: "Group(s) to provide sudo privileges to. This property accepts either an array or a comma separated list. Leading % on group names is optional.",
+        default: [],
+        coerce: proc { |x| coerce_groups(x) }
 
       property :commands, Array,
-               description: "An array of commands this sudoer can execute.",
-               default: ["ALL"]
+        description: "An array of full paths to commands this sudoer can execute.",
+        default: ["ALL"]
 
       property :host, String,
-               description: "The host to set in the sudo config.",
-               default: "ALL"
+        description: "The host to set in the sudo configuration.",
+        default: "ALL"
 
       property :runas, String,
-               description: "User the command(s) can be run as",
-               default: "ALL"
+        description: "User that the command(s) can be run as.",
+        default: "ALL"
 
       property :nopasswd, [TrueClass, FalseClass],
-               description: "Allow running sudo without specifying a password sudo",
-               default: false
+        description: "Allow sudo to be run without specifying a password.",
+        default: false
 
       property :noexec, [TrueClass, FalseClass],
-               description: "Prevent commands from shelling out.",
-               default: false
+        description: "Prevent commands from shelling out.",
+        default: false
 
       property :template, String,
-               description: "The name of the erb template in your cookbook if you wish to supply your own template."
+        description: "The name of the erb template in your cookbook, if you wish to supply your own template."
 
       property :variables, [Hash, nil],
-               description: "The variables to pass to the custom template. Ignored if not using a custom template.",
-               default: nil
+        description: "The variables to pass to the custom template. This property is ignored if not using a custom template.",
+        default: nil
 
       property :defaults, Array,
-               description: "An array of defaults for the user/group.",
-               default: lazy { [] }
+        description: "An array of defaults for the user/group.",
+        default: []
 
       property :command_aliases, Array,
-               description: "Command aliases that can be used as allowed commands later in the config",
-               default: lazy { [] }
+        description: "Command aliases that can be used as allowed commands later in the configuration.",
+        default: []
 
       property :setenv, [TrueClass, FalseClass],
-               description: "Whether to permit the preserving of environment with sudo -E.",
-               default: false
+        description: "Determines whether or not to permit preservation of the environment with `sudo -E`.",
+        default: false
 
       property :env_keep_add, Array,
-               description: "An array of strings to add to env_keep.",
-               default: lazy { [] }
+        description: "An array of strings to add to `env_keep`.",
+        default: []
 
       property :env_keep_subtract, Array,
-               description: "An array of strings to remove from env_keep.",
-               default: lazy { [] }
+        description: "An array of strings to remove from `env_keep`.",
+        default: []
 
       property :visudo_path, String,
-               description: "Deprecated property. Do not use."
+        deprecated: true
 
       property :visudo_binary, String,
-               description: "The path to visudo for config verification.",
-               default: "/usr/sbin/visudo"
+        description: "The path to visudo for configuration verification.",
+        default: "/usr/sbin/visudo"
 
       property :config_prefix, String,
-               description: "The directory containing the sudoers config file.",
-               default: lazy { platform_config_prefix }
+        description: "The directory that contains the sudoers configuration file.",
+        default: lazy { platform_config_prefix }, default_description: "Prefix values based on the node's platform"
 
       # handle legacy cookbook property
       def after_created
-        raise "The 'visudo_path' property from the sudo cookbook has been replaced with the 'visudo_binary' property. The path is now more intelligently determined and for most users specifying the path should no longer be necessary. If this resource still cannot determine the path to visudo then provide the full path to the binary with the 'visudo_binary' property." if visudo_path
+        raise "The 'visudo_path' property from the sudo cookbook has been replaced with the 'visudo_binary' property. The path is now more intelligently determined and for most users specifying the path should no longer be necessary. If this resource still cannot determine the path to visudo then provide the absolute path to the binary with the 'visudo_binary' property." if visudo_path
       end
 
       # VERY old legacy properties
@@ -142,36 +170,34 @@ class Chef
         end
       end
 
-      action :create do
-        description "Create a single sudoers config in the sudoers.d directory"
-
+      action :create, description: "Create a single sudoers configuration file in the `sudoers.d` directory." do
         validate_properties
 
         if docker? # don't even put this into resource collection unless we're in docker
-          declare_resource(:package, "sudo") do
-            action :nothing
+          package "sudo" do
             not_if "which sudo"
-          end.run_action(:install)
+          end
         end
 
         target = "#{new_resource.config_prefix}/sudoers.d/"
-        declare_resource(:directory, target) unless ::File.exist?(target)
+        directory(target)
 
         Chef::Log.warn("#{new_resource.filename} will be rendered, but will not take effect because the #{new_resource.config_prefix}/sudoers config lacks the includedir directive that loads configs from #{new_resource.config_prefix}/sudoers.d/!") if ::File.readlines("#{new_resource.config_prefix}/sudoers").grep(/includedir/).empty?
+        file_path = "#{target}#{new_resource.filename}"
 
         if new_resource.template
           logger.trace("Template property provided, all other properties ignored.")
 
-          declare_resource(:template, "#{target}#{new_resource.filename}") do
+          template file_path do
             source new_resource.template
             mode "0440"
             variables new_resource.variables
-            verify "#{new_resource.visudo_binary} -cf %{path}" if visudo_present?
+            verify visudo_content(file_path) if visudo_present?
             action :create
           end
         else
-          declare_resource(:template, "#{target}#{new_resource.filename}") do
-            source ::File.expand_path("../support/sudoer.erb", __FILE__)
+          template file_path do
+            source ::File.expand_path("support/sudoer.erb", __dir__)
             local true
             mode "0440"
             variables sudoer:            (new_resource.groups + new_resource.users).join(","),
@@ -185,7 +211,7 @@ class Chef
                       setenv:             new_resource.setenv,
                       env_keep_add:       new_resource.env_keep_add,
                       env_keep_subtract:  new_resource.env_keep_subtract
-            verify "#{new_resource.visudo_binary} -cf %{path}" if visudo_present?
+            verify visudo_content(file_path) if visudo_present?
             action :create
           end
         end
@@ -202,9 +228,7 @@ class Chef
       end
 
       # Removes a user from the sudoers group
-      action :delete do
-        description "Remove a sudoers config from the sudoers.d directory"
-
+      action :delete, description: "Remove a sudoers configuration file from the `sudoers.d` directory." do
         file "#{new_resource.config_prefix}/sudoers.d/#{new_resource.filename}" do
           action :delete
         end
@@ -222,7 +246,16 @@ class Chef
 
         def visudo_present?
           return true if ::File.exist?(new_resource.visudo_binary)
+
           Chef::Log.warn("The visudo binary cannot be found at '#{new_resource.visudo_binary}'. Skipping sudoer file validation. If visudo is on this system you can specify the path using the 'visudo_binary' property.")
+        end
+
+        def visudo_content(path)
+          if ::File.exist?(path)
+            "cat #{new_resource.config_prefix}/sudoers | #{new_resource.visudo_binary} -cf - && #{new_resource.visudo_binary} -cf %{path}"
+          else
+            "cat #{new_resource.config_prefix}/sudoers %{path} | #{new_resource.visudo_binary} -cf -"
+          end
         end
       end
     end

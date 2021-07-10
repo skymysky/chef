@@ -1,6 +1,6 @@
 #
 # Author:: Toomas Pelberg (<toomasp@gmx.net>)
-# Copyright:: Copyright 2010-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-require "chef/provider/package"
-require "chef/resource/package"
-require "chef/mixin/get_source_from_package"
+require_relative "../package"
+require_relative "../../resource/package"
+require_relative "../../mixin/get_source_from_package"
 
 class Chef
   class Provider
@@ -26,8 +26,6 @@ class Chef
 
         include Chef::Mixin::GetSourceFromPackage
 
-        provides :package, platform: "nexentacore"
-        provides :package, platform: "solaris2", platform_version: "< 5.11"
         provides :solaris_package
 
         # def initialize(*args)
@@ -38,11 +36,11 @@ class Chef
           super
           requirements.assert(:install) do |a|
             a.assertion { new_resource.source }
-            a.failure_message Chef::Exceptions::Package, "Source for package #{new_resource.name} required for action install"
+            a.failure_message Chef::Exceptions::Package, "Source for package #{new_resource.package_name} required for action install"
           end
           requirements.assert(:all_actions) do |a|
             a.assertion { !new_resource.source || @package_source_found }
-            a.failure_message Chef::Exceptions::Package, "Package #{new_resource.name} not found: #{new_resource.source}"
+            a.failure_message Chef::Exceptions::Package, "Package #{new_resource.package_name} not found: #{new_resource.source}"
             a.whyrun "would assume #{new_resource.source} would be have previously been made available"
           end
         end
@@ -55,7 +53,7 @@ class Chef
             @package_source_found = ::File.exist?(new_resource.source)
             if @package_source_found
               logger.trace("#{new_resource} checking pkg status")
-              shell_out_compact_timeout("pkginfo", "-l", "-d", new_resource.source, new_resource.package_name).stdout.each_line do |line|
+              shell_out("pkginfo", "-l", "-d", new_resource.source, new_resource.package_name).stdout.each_line do |line|
                 case line
                 when /VERSION:\s+(.+)/
                   new_resource.version($1)
@@ -65,7 +63,7 @@ class Chef
           end
 
           logger.trace("#{new_resource} checking install state")
-          status = shell_out_compact_timeout("pkginfo", "-l", current_resource.package_name)
+          status = shell_out("pkginfo", "-l", current_resource.package_name)
           status.stdout.each_line do |line|
             case line
             when /VERSION:\s+(.+)/
@@ -83,7 +81,8 @@ class Chef
 
         def candidate_version
           return @candidate_version if @candidate_version
-          status = shell_out_compact_timeout("pkginfo", "-l", "-d", new_resource.source, new_resource.package_name)
+
+          status = shell_out("pkginfo", "-l", "-d", new_resource.source, new_resource.package_name)
           status.stdout.each_line do |line|
             case line
             when /VERSION:\s+(.+)/
@@ -95,6 +94,7 @@ class Chef
           unless status.exitstatus == 0
             raise Chef::Exceptions::Package, "pkginfo -l -d #{new_resource.source} - #{status.inspect}!"
           end
+
           @candidate_version
         end
 
@@ -106,7 +106,7 @@ class Chef
                       else
                         [ "pkgadd", "-n", "-d", new_resource.source, "all" ]
                       end
-            shell_out_compact_timeout!(command)
+            shell_out!(command)
             logger.trace("#{new_resource} installed version #{new_resource.version} from: #{new_resource.source}")
           else
             command = if ::File.directory?(new_resource.source) # CHEF-4469
@@ -114,7 +114,7 @@ class Chef
                       else
                         [ "pkgadd", "-n", options, "-d", new_resource.source, "all" ]
                       end
-            shell_out_compact_timeout!(*command)
+            shell_out!(*command)
             logger.trace("#{new_resource} installed version #{new_resource.version} from: #{new_resource.source}")
           end
         end
@@ -123,10 +123,10 @@ class Chef
 
         def remove_package(name, version)
           if options.nil?
-            shell_out_compact_timeout!( "pkgrm", "-n", name )
+            shell_out!( "pkgrm", "-n", name )
             logger.trace("#{new_resource} removed version #{new_resource.version}")
           else
-            shell_out_compact_timeout!( "pkgrm", "-n", options, name )
+            shell_out!( "pkgrm", "-n", options, name )
             logger.trace("#{new_resource} removed version #{new_resource.version}")
           end
         end

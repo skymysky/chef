@@ -1,7 +1,7 @@
 # Author:: Prajakta Purohit (<prajakta@chef.io>)
 # Author:: Lamont Granquist (<lamont@chef.io>)
 #
-# Copyright:: Copyright 2011-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,17 +16,107 @@
 # limitations under the License.
 #
 
-require "chef/resource"
-require "chef/digester"
+require_relative "../resource"
+require_relative "../digester"
 
 class Chef
   class Resource
     class RegistryKey < Chef::Resource
-      resource_name :registry_key
+      unified_mode true
+
       provides(:registry_key) { true }
 
-      description "Use the registry_key resource to create and delete registry keys in Microsoft Windows."
-      introduced "11.0"
+      description "Use the **registry_key** resource to create and delete registry keys in Microsoft Windows."
+      examples <<~'DOC'
+      **Create a registry key**
+
+      ```ruby
+      registry_key 'HKEY_LOCAL_MACHINE\\path-to-key\\Policies\\System' do
+        values [{
+          name: 'EnableLUA',
+          type: :dword,
+          data: 0
+        }]
+        action :create
+      end
+      ```
+
+      **Create a registry key with binary data: "\x01\x02\x03"**:
+
+      ```ruby
+      registry_key 'HKEY_CURRENT_USER\ChefTest' do
+        values [{
+          :name => "test",
+          :type => :binary,
+          :data => [0, 1, 2].map(&:chr).join
+        }]
+        action :create
+      end
+      ```
+
+      **Create 32-bit key in redirected wow6432 tree**
+
+      In 64-bit versions of Microsoft Windows, HKEY_LOCAL_MACHINE\SOFTWARE\Example is a re-directed key. In the following examples, because HKEY_LOCAL_MACHINE\SOFTWARE\Example is a 32-bit key, the output will be “Found 32-bit key” if they are run on a version of Microsoft Windows that is 64-bit:
+
+      ```ruby
+      registry_key 'HKEY_LOCAL_MACHINE\SOFTWARE\Example' do
+        architecture :i386
+        recursive true
+        action :create
+      end
+      ```
+
+      **Set proxy settings to be the same as those used by Chef Infra Client**
+
+      ```ruby
+      proxy = URI.parse(Chef::Config[:http_proxy])
+      registry_key 'HKCU\Software\Microsoft\path\to\key\Internet Settings' do
+        values [{name: 'ProxyEnable', type: :reg_dword, data: 1},
+                {name: 'ProxyServer', data: "#{proxy.host}:#{proxy.port}"},
+                {name: 'ProxyOverride', type: :reg_string, data: <local>},
+               ]
+        action :create
+      end
+      ```
+
+      **Set the name of a registry key to "(Default)"**
+
+      ```ruby
+      registry_key 'Set (Default) value' do
+        key 'HKLM\Software\Test\Key\Path'
+        values [
+          {name: '', type: :string, data: 'test'},
+        ]
+        action :create
+      end
+      ```
+
+      **Delete a registry key value**
+
+      ```ruby
+      registry_key 'HKEY_LOCAL_MACHINE\SOFTWARE\path\to\key\AU' do
+        values [{
+          name: 'NoAutoRebootWithLoggedOnUsers',
+          type: :dword,
+          data: ''
+          }]
+        action :delete
+      end
+      ```
+
+      Note: If data: is not specified, you get an error: Missing data key in RegistryKey values hash
+
+      **Delete a registry key and its subkeys, recursively**
+
+      ```ruby
+      registry_key 'HKCU\SOFTWARE\Policies\path\to\key\Themes' do
+        recursive true
+        action :delete_key
+      end
+      ```
+
+      Note: Be careful when using the :delete_key action with the recursive attribute. This will delete the registry key, all of its values and all of the names, types, and data associated with them. This cannot be undone by Chef Infra Client.
+      DOC
 
       state_attrs :values
 
@@ -69,24 +159,31 @@ class Chef
         @values, @unscrubbed_values = [], []
       end
 
-      property :key, String, name_property: true, identity: true
+      property :key, String, name_property: true
+
+      VALID_VALUE_HASH_KEYS = %i{name type data}.freeze
 
       def values(arg = nil)
         if not arg.nil?
           if arg.is_a?(Hash)
-            @values = [ arg ]
+            @values = [ Mash.new(arg).symbolize_keys ]
           elsif arg.is_a?(Array)
-            @values = arg
+            @values = []
+            arg.each do |value|
+              @values << Mash.new(value).symbolize_keys
+            end
           else
             raise ArgumentError, "Bad type for RegistryKey resource, use Hash or Array"
           end
 
           @values.each do |v|
-            raise ArgumentError, "Missing name key in RegistryKey values hash" unless v.has_key?(:name)
+            raise ArgumentError, "Missing name key in RegistryKey values hash" unless v.key?(:name)
+
             v.each_key do |key|
-              raise ArgumentError, "Bad key #{key} in RegistryKey values hash" unless [:name, :type, :data].include?(key)
+              raise ArgumentError, "Bad key #{key} in RegistryKey values hash" unless VALID_VALUE_HASH_KEYS.include?(key)
             end
             raise ArgumentError, "Type of name => #{v[:name]} should be string" unless v[:name].is_a?(String)
+
             if v[:type]
               raise ArgumentError, "Type of type => #{v[:type]} should be symbol" unless v[:type].is_a?(Symbol)
             end
@@ -98,7 +195,7 @@ class Chef
       end
 
       property :recursive, [TrueClass, FalseClass], default: false
-      property :architecture, Symbol, default: :machine, equal_to: [:machine, :x86_64, :i386]
+      property :architecture, Symbol, default: :machine, equal_to: %i{machine x86_64 i386}
 
       private
 
@@ -118,7 +215,7 @@ class Chef
       # Some data types may raise errors when sent as json. Returns true if this
       # value's data may need to be converted to a checksum.
       def needs_checksum?(value)
-        unsafe_types = [:binary, :dword, :dword_big_endian, :qword]
+        unsafe_types = %i{binary dword dword_big_endian qword}
         unsafe_types.include?(value[:type])
       end
 

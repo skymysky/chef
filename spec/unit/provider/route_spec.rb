@@ -72,7 +72,7 @@ describe Chef::Provider::Route do
         expect(provider.is_running).to be_falsey
       end
 
-      it "should detect existing routes and set is_running attribute correctly" do
+      it "should detect existing routes and set is_running property correctly" do
         resource = Chef::Resource::Route.new("192.168.100.0/24")
         allow(resource).to receive(:gateway).and_return("192.168.132.9")
         allow(resource).to receive(:device).and_return("eth0")
@@ -114,7 +114,7 @@ describe Chef::Provider::Route do
     end
 
     it "should not delete config file for :add action (CHEF-3332)" do
-      @node.automatic_attrs[:platform] = "centos"
+      @node.automatic_attrs[:platform_family] = "rhel"
 
       route_file = StringIO.new
       expect(File).to receive(:new).and_return(route_file)
@@ -125,7 +125,7 @@ describe Chef::Provider::Route do
       @resource_add.action(:add)
       @provider.run_action(:add)
       expect(route_file.string.split("\n").size).to eq(1)
-      expect(route_file.string).to match(/^192\.168\.1\.0\/24 via 192\.168\.0\.1$/)
+      expect(route_file.string).to match(%r{^192\.168\.1\.0/24 via 192\.168\.0\.1$})
     end
   end
 
@@ -150,12 +150,12 @@ describe Chef::Provider::Route do
   describe Chef::Provider::Route, "generate_command for action_add" do
     it "should include a netmask when a one is specified" do
       @new_resource.netmask("255.255.0.0")
-      expect(@provider.generate_command(:add).join(" ")).to match(/\/\d{1,2}/)
+      expect(@provider.generate_command(:add).join(" ")).to match(%r{/\d{1,2}})
     end
 
     it "should not include a netmask when a one is specified" do
       @new_resource.netmask(nil)
-      expect(@provider.generate_command(:add).join(" ")).not_to match(/\/\d{1,2}/)
+      expect(@provider.generate_command(:add).join(" ")).not_to match(%r{/\d{1,2}})
     end
 
     it "should include ' via $gateway ' when a gateway is specified" do
@@ -167,7 +167,7 @@ describe Chef::Provider::Route do
       expect(@provider.generate_command(:add).join(" ")).not_to match(/\svia\s#{Regexp.escape(@new_resource.gateway.to_s)}/)
     end
 
-    it "should use the gatway when target is default" do
+    it "should use the gateway when target is default" do
       @default_resource.gateway("10.0.0.10")
       expect(@default_provider.generate_command(:add).join(" ")).to match(/10.0.0.10/)
     end
@@ -176,12 +176,12 @@ describe Chef::Provider::Route do
   describe Chef::Provider::Route, "generate_command for action_delete" do
     it "should include a netmask when a one is specified" do
       @new_resource.netmask("255.255.0.0")
-      expect(@provider.generate_command(:delete).join(" ")).to match(/\/\d{1,2}/)
+      expect(@provider.generate_command(:delete).join(" ")).to match(%r{/\d{1,2}})
     end
 
     it "should not include a netmask when a one is specified" do
       @new_resource.netmask(nil)
-      expect(@provider.generate_command(:delete).join(" ")).not_to match(/\/\d{1,2}/)
+      expect(@provider.generate_command(:delete).join(" ")).not_to match(%r{/\d{1,2}})
     end
 
     it "should include ' via $gateway ' when a gateway is specified" do
@@ -197,11 +197,11 @@ describe Chef::Provider::Route do
   describe Chef::Provider::Route, "config_file_contents for action_add" do
     it "should include a netmask when a one is specified" do
       @new_resource.netmask("255.255.0.0")
-      expect(@provider.config_file_contents(:add, target: @new_resource.target, netmask: @new_resource.netmask)).to match(/\/\d{1,2}.*\n$/)
+      expect(@provider.config_file_contents(:add, target: @new_resource.target, netmask: @new_resource.netmask)).to match(%r{/\d{1,2}.*\n$})
     end
 
     it "should not include a netmask when a one is specified" do
-      expect(@provider.config_file_contents(:add, target: @new_resource.target)).not_to match(/\/\d{1,2}.*\n$/)
+      expect(@provider.config_file_contents(:add, target: @new_resource.target)).not_to match(%r{/\d{1,2}.*\n$})
     end
 
     it "should include ' via $gateway ' when a gateway is specified" do
@@ -220,9 +220,9 @@ describe Chef::Provider::Route do
   end
 
   describe Chef::Provider::Route, "generate_config method" do
-    %w{ centos redhat fedora }.each do |platform|
-      it "should write a route file on #{platform} platform" do
-        @node.automatic_attrs[:platform] = platform
+    %w{ rhel fedora amazon }.each do |platform_family|
+      it "should write a route file on #{platform_family} platform family" do
+        @node.automatic_attrs[:platform_family] = platform_family
 
         route_file = StringIO.new
         expect(File).to receive(:new).with("/etc/sysconfig/network-scripts/route-eth0", "w").and_return(route_file)
@@ -230,10 +230,8 @@ describe Chef::Provider::Route do
         @provider.generate_config
       end
 
-    end
-    %w{ centos redhat fedora }.each do |platform|
-      it "should write a default route file on #{platform} platform" do
-        @node.automatic_attrs[:platform] = platform
+      it "should write a default route file on #{platform_family} platform family" do
+        @node.automatic_attrs[:platform_family] = platform_family
 
         route_file = StringIO.new
         allow(File).to receive(:exist?).with("/etc/sysconfig/network").and_return(false)
@@ -245,7 +243,7 @@ describe Chef::Provider::Route do
     end
 
     it "should put all routes for a device in a route config file" do
-      @node.automatic_attrs[:platform] = "centos"
+      @node.automatic_attrs[:platform_family] = "rhel"
 
       route_file = StringIO.new
       expect(File).to receive(:new).and_return(route_file)
@@ -261,10 +259,10 @@ describe Chef::Provider::Route do
       @provider.action = :add
       @provider.generate_config
       expect(route_file.string.split("\n").size).to eq(4)
-      expect(route_file.string).to match(/^192\.168\.1\.0\/24 via 192\.168\.0\.1$/)
-      expect(route_file.string).to match(/^192\.168\.2\.0\/24 via 192\.168\.0\.1$/)
-      expect(route_file.string).to match(/^192\.168\.3\.0\/24 via 192\.168\.0\.1$/)
-      expect(route_file.string).to match(/^192\.168\.4\.0\/24 via 192\.168\.0\.1$/)
+      expect(route_file.string).to match(%r{^192\.168\.1\.0/24 via 192\.168\.0\.1$})
+      expect(route_file.string).to match(%r{^192\.168\.2\.0/24 via 192\.168\.0\.1$})
+      expect(route_file.string).to match(%r{^192\.168\.3\.0/24 via 192\.168\.0\.1$})
+      expect(route_file.string).to match(%r{^192\.168\.4\.0/24 via 192\.168\.0\.1$})
     end
   end
 end

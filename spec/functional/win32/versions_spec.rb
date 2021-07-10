@@ -1,6 +1,6 @@
 #
 # Author:: Chirag Jog (<chirag@clogeny.com>)
-# Copyright:: Copyright 2013-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 #
 
 require "spec_helper"
-if Chef::Platform.windows?
+if ChefUtils.windows?
   require "chef/win32/version"
 end
 
@@ -40,7 +40,7 @@ describe "Chef::ReservedNames::Win32::Version", :windows_only do
       @current_os_version = "Windows Server 2008"
     else
       # The name from WMI is actually what we want in Win2k8R2+.
-      # So this expectation sould continue to hold without modification
+      # So this expectation should continue to hold without modification
       # as new versions of Windows are released.
       @current_os_version = host["caption"]
     end

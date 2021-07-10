@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2009-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -149,7 +149,8 @@ describe Chef::Search::Query do
       ],
       "start" => 0,
       "total" => 4,
-    } end
+    }
+    end
 
     let(:big_response_empty) do
       {
@@ -169,7 +170,7 @@ describe Chef::Search::Query do
     it "accepts a type as the first argument" do
       expect { query.search("node") }.not_to raise_error
       expect { query.search(:node) }.not_to raise_error
-      expect { query.search(Hash.new) }.to raise_error(Chef::Exceptions::InvalidSearchQuery, /(Hash)/)
+      expect { query.search({}) }.to raise_error(Chef::Exceptions::InvalidSearchQuery, /(Hash)/)
     end
 
     it "queries for every object of a type by default" do
@@ -194,7 +195,7 @@ describe Chef::Search::Query do
 
     it "throws an exception if you pass an incorrect option" do
       expect { query.search(:node, "platform:rhel", total: 10) }
-        .to raise_error(ArgumentError, /unknown keyword: total/)
+        .to raise_error(ArgumentError, /unknown keyword: :?total/)
     end
 
     it "returns the raw rows, start, and total if no block is passed" do
@@ -232,11 +233,18 @@ describe Chef::Search::Query do
       end
     end
 
-    it "fuzzifies node searches when fuzz is set" do
+    it "fuzzifies node searches when fuzz is set and type is a symbol" do
       expect(rest).to receive(:get).with(
         "search/node?q=tags:*free.messi*%20OR%20roles:*free.messi*%20OR%20fqdn:*free.messi*%20OR%20addresses:*free.messi*%20OR%20policy_name:*free.messi*%20OR%20policy_group:*free.messi*&start=0&rows=#{default_rows}"
       ).and_return(response)
       query.search(:node, "free.messi", fuzz: true)
+    end
+
+    it "fuzzifies node searches when fuzz is set and type is a string" do
+      expect(rest).to receive(:get).with(
+        "search/node?q=tags:*free.messi*%20OR%20roles:*free.messi*%20OR%20fqdn:*free.messi*%20OR%20addresses:*free.messi*%20OR%20policy_name:*free.messi*%20OR%20policy_group:*free.messi*&start=0&rows=#{default_rows}"
+      ).and_return(response)
+      query.search("node", "free.messi", fuzz: true)
     end
 
     it "does not fuzzify node searches when fuzz is not set" do

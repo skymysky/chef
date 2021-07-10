@@ -2,7 +2,7 @@
 # Author:: Nuo Yan <nuo@chef.io>
 # Author:: Bryan McLellan <btm@loftninjas.org>
 # Author:: Seth Chisamore <schisamo@chef.io>
-# Copyright:: Copyright 2010-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,10 +18,10 @@
 # limitations under the License.
 #
 
-require "chef/provider/service/simple"
-require "chef/win32_service_constants"
-if RUBY_PLATFORM =~ /mswin|mingw32|windows/
-  require "chef/win32/error"
+require_relative "simple"
+require_relative "../../win32_service_constants"
+if RUBY_PLATFORM.match?(/mswin|mingw32|windows/)
+  require_relative "../../win32/error"
   require "win32/service"
 end
 
@@ -33,23 +33,21 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
   include Chef::ReservedNames::Win32::API::Error rescue LoadError
   include Chef::Win32ServiceConstants
 
-  #Win32::Service.get_start_type
-  AUTO_START = "auto start"
-  MANUAL = "demand start"
-  DISABLED = "disabled"
+  # Win32::Service.get_start_type
+  AUTO_START = "auto start".freeze
+  MANUAL = "demand start".freeze
+  DISABLED = "disabled".freeze
 
-  #Win32::Service.get_current_state
-  RUNNING = "running"
-  STOPPED = "stopped"
-  CONTINUE_PENDING = "continue pending"
-  PAUSE_PENDING = "pause pending"
-  PAUSED = "paused"
-  START_PENDING = "start pending"
-  STOP_PENDING  = "stop pending"
+  # Win32::Service.get_current_state
+  RUNNING = "running".freeze
+  STOPPED = "stopped".freeze
+  CONTINUE_PENDING = "continue pending".freeze
+  PAUSE_PENDING = "pause pending".freeze
+  PAUSED = "paused".freeze
+  START_PENDING = "start pending".freeze
+  STOP_PENDING  = "stop pending".freeze
 
-  TIMEOUT = 60
-
-  SERVICE_RIGHT = "SeServiceLogonRight"
+  SERVICE_RIGHT = "SeServiceLogonRight".freeze
 
   def load_current_resource
     @current_resource = Chef::Resource::WindowsService.new(new_resource.name)
@@ -83,26 +81,11 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
 
   def start_service
     if Win32::Service.exists?(@new_resource.service_name)
-      # reconfiguration is idempotent, so just do it.
-      new_config = {
-        service_name: @new_resource.service_name,
-        service_start_name: @new_resource.run_as_user,
-        password: @new_resource.run_as_password,
-      }.reject { |k, v| v.nil? || v.length == 0 }
-
-      Win32::Service.configure(new_config)
-      logger.info "#{@new_resource} configured with #{new_config.inspect}"
-
-      # LocalSystem is the default runas user, which is a special service account that should ultimately have the rights of BUILTIN\Administrators, but we wouldn't see that from get_account_right
-      if new_config.has_key?(:service_start_name) && new_config[:service_start_name].casecmp("localsystem") != 0
-        unless Chef::ReservedNames::Win32::Security.get_account_right(canonicalize_username(new_config[:service_start_name])).include?(SERVICE_RIGHT)
-          grant_service_logon(new_config[:service_start_name])
-        end
-      end
+      configure_service_run_as_properties
 
       state = current_state
       if state == RUNNING
-        logger.trace "#{@new_resource} already started - nothing to do"
+        logger.debug "#{@new_resource} already started - nothing to do"
       elsif state == START_PENDING
         logger.trace "#{@new_resource} already sent start signal - waiting for start"
         wait_for_state(RUNNING)
@@ -112,17 +95,17 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
           shell_out!(@new_resource.start_command)
         else
           spawn_command_thread do
-            begin
-              Win32::Service.start(@new_resource.service_name)
-            rescue SystemCallError => ex
-              if ex.errno == ERROR_SERVICE_LOGON_FAILED
-                logger.error ex.message
-                raise Chef::Exceptions::Service,
+
+            Win32::Service.start(@new_resource.service_name)
+          rescue SystemCallError => ex
+            if ex.errno == ERROR_SERVICE_LOGON_FAILED
+              logger.error ex.message
+              raise Chef::Exceptions::Service,
                 "Service #{@new_resource} did not start due to a logon failure (error #{ERROR_SERVICE_LOGON_FAILED}): possibly the specified user '#{@new_resource.run_as_user}' does not have the 'log on as a service' privilege, or the password is incorrect."
-              else
-                raise ex
-              end
+            else
+              raise ex
             end
+
           end
           wait_for_state(RUNNING)
         end
@@ -131,7 +114,7 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
         raise Chef::Exceptions::Service, "Service #{@new_resource} can't be started from state [#{state}]"
       end
     else
-      logger.trace "#{@new_resource} does not exist - nothing to do"
+      logger.debug "#{@new_resource} does not exist - nothing to do"
     end
   end
 
@@ -150,7 +133,7 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
         end
         @new_resource.updated_by_last_action(true)
       elsif state == STOPPED
-        logger.trace "#{@new_resource} already stopped - nothing to do"
+        logger.debug "#{@new_resource} already stopped - nothing to do"
       elsif state == STOP_PENDING
         logger.trace "#{@new_resource} already sent stop signal - waiting for stop"
         wait_for_state(STOPPED)
@@ -158,7 +141,7 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
         raise Chef::Exceptions::Service, "Service #{@new_resource} can't be stopped from state [#{state}]"
       end
     else
-      logger.trace "#{@new_resource} does not exist - nothing to do"
+      logger.debug "#{@new_resource} does not exist - nothing to do"
     end
   end
 
@@ -173,7 +156,7 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
       end
       @new_resource.updated_by_last_action(true)
     else
-      logger.trace "#{@new_resource} does not exist - nothing to do"
+      logger.debug "#{@new_resource} does not exist - nothing to do"
     end
   end
 
@@ -181,7 +164,7 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
     if Win32::Service.exists?(@new_resource.service_name)
       set_startup_type(:automatic)
     else
-      logger.trace "#{@new_resource} does not exist - nothing to do"
+      logger.debug "#{@new_resource} does not exist - nothing to do"
     end
   end
 
@@ -189,13 +172,13 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
     if Win32::Service.exists?(@new_resource.service_name)
       set_startup_type(:disabled)
     else
-      logger.trace "#{@new_resource} does not exist - nothing to do"
+      logger.debug "#{@new_resource} does not exist - nothing to do"
     end
   end
 
   action :create do
     if Win32::Service.exists?(new_resource.service_name)
-      logger.trace "#{new_resource} already exists - nothing to do"
+      logger.debug "#{new_resource} already exists - nothing to do"
       return
     end
 
@@ -208,7 +191,7 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
 
   action :delete do
     unless Win32::Service.exists?(new_resource.service_name)
-      logger.trace "#{new_resource} does not exist - nothing to do"
+      logger.debug "#{new_resource} does not exist - nothing to do"
       return
     end
 
@@ -223,55 +206,52 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
       return
     end
 
-    # Until #6300 is solved this is required
-    if new_resource.run_as_user == new_resource.class.properties[:run_as_user].default
-      new_resource.run_as_user = new_resource.class.properties[:run_as_user].default
-    end
-
     converge_if_changed :service_type, :startup_type, :error_control,
-                        :binary_path_name, :load_order_group, :dependencies,
-                        :run_as_user, :display_name, :description do
-      Win32::Service.configure(windows_service_config(:configure))
-    end
+      :binary_path_name, :load_order_group, :dependencies,
+      :run_as_user, :display_name, :description do
+        Win32::Service.configure(windows_service_config(:configure))
+      end
 
     converge_delayed_start
   end
 
-  def action_enable
+  action :enable do
     if current_startup_type != :automatic
       converge_by("enable service #{@new_resource}") do
         enable_service
         logger.info("#{@new_resource} enabled")
       end
     else
-      logger.trace("#{@new_resource} already enabled - nothing to do")
+      logger.debug("#{@new_resource} already enabled - nothing to do")
     end
     load_new_resource_state
     @new_resource.enabled(true)
   end
 
-  def action_disable
+  action :disable do
     if current_startup_type != :disabled
       converge_by("disable service #{@new_resource}") do
         disable_service
         logger.info("#{@new_resource} disabled")
       end
     else
-      logger.trace("#{@new_resource} already disabled - nothing to do")
+      logger.debug("#{@new_resource} already disabled - nothing to do")
     end
     load_new_resource_state
     @new_resource.enabled(false)
   end
 
-  def action_configure_startup
+  action :configure_startup do
     startup_type = @new_resource.startup_type
     if current_startup_type != startup_type
       converge_by("set service #{@new_resource} startup type to #{startup_type}") do
         set_startup_type(startup_type)
       end
     else
-      logger.trace("#{@new_resource} startup_type already #{startup_type} - nothing to do")
+      logger.debug("#{@new_resource} startup_type already #{startup_type} - nothing to do")
     end
+
+    converge_delayed_start
 
     # Avoid changing enabled from true/false for now
     @new_resource.enabled(nil)
@@ -279,15 +259,39 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
 
   private
 
+  def configure_service_run_as_properties
+    return unless new_resource.property_is_set?(:run_as_user)
+
+    new_config = {
+      service_name: new_resource.service_name,
+      service_start_name: new_resource.run_as_user,
+      password: new_resource.run_as_password,
+    }.reject { |k, v| v.nil? || v.length == 0 }
+
+    Win32::Service.configure(new_config)
+    logger.info "#{new_resource} configured."
+
+    grant_service_logon(new_resource.run_as_user) if new_resource.run_as_user != "localsystem"
+  end
+
+  #
+  # Queries the delayed auto-start setting of the auto-start service. If
+  # the service is not auto-start, this will return nil.
+  #
+  # @return [Boolean, nil]
+  #
   def current_delayed_start
-    if service = Win32::Service.services.find { |x| x.service_name == new_resource.service_name }
-      service.delayed_start == 0 ? false : true
-    else
-      nil
+    case Win32::Service.delayed_start(new_resource.service_name)
+    when 0
+      false
+    when 1
+      true
     end
   end
 
   def grant_service_logon(username)
+    return if Chef::ReservedNames::Win32::Security.get_account_right(canonicalize_username(username)).include?(SERVICE_RIGHT)
+
     begin
       Chef::ReservedNames::Win32::Security.add_account_right(canonicalize_username(username), SERVICE_RIGHT)
     rescue Chef::Exceptions::Win32APIError => err
@@ -301,7 +305,7 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
 
   # remove characters that make for broken or wonky filenames.
   def clean_username_for_path(username)
-    username.gsub(/[\/\\. ]+/, "_")
+    username.gsub(%r{[/\\. ]+}, "_")
   end
 
   def canonicalize_username(username)
@@ -323,13 +327,10 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
     retries = 0
     loop do
       break if current_state == desired_state
-      raise Timeout::Error if ( retries += 1 ) > resource_timeout
+      raise Timeout::Error if ( retries += 1 ) > @new_resource.timeout
+
       sleep 1
     end
-  end
-
-  def resource_timeout
-    @resource_timeout ||= @new_resource.timeout || TIMEOUT
   end
 
   def spawn_command_thread
@@ -337,7 +338,7 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
       yield
     end
 
-    Timeout.timeout(resource_timeout) do
+    Timeout.timeout(@new_resource.timeout) do
       worker.join
     end
   end
@@ -359,8 +360,8 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
 
     logger.trace "#{@new_resource.name} setting start_type to #{type}"
     Win32::Service.configure(
-      :service_name => @new_resource.service_name,
-      :start_type => startup_type
+      service_name: @new_resource.service_name,
+      start_type: startup_type
     )
     @new_resource.updated_by_last_action(true)
   end
@@ -389,16 +390,11 @@ class Chef::Provider::Service::Windows < Chef::Provider::Service
   end
 
   def converge_delayed_start
-    config = {}
-    config[:service_name]  = new_resource.service_name
-    config[:delayed_start] = new_resource.delayed_start ? 1 : 0
-
-    # Until #6300 is solved this is required
-    if new_resource.delayed_start == new_resource.class.properties[:delayed_start].default
-      new_resource.delayed_start = new_resource.class.properties[:delayed_start].default
-    end
-
     converge_if_changed :delayed_start do
+      config = {}
+      config[:service_name]  = new_resource.service_name
+      config[:delayed_start] = new_resource.delayed_start ? 1 : 0
+
       Win32::Service.configure(config)
     end
   end

@@ -1,6 +1,6 @@
 # Author:: Bryan McLellan <btm@loftninjas.org>
 # Author:: Seth Chisamore <schisamo@chef.io>
-# Copyright:: Copyright 2011-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/dsl/platform_introspection"
-require "chef/dsl/registry_helper"
+require_relative "platform_introspection"
+require_relative "registry_helper"
 
 class Chef
   module DSL
@@ -37,17 +37,16 @@ class Chef
           # due to a file being in use (usually a temporary file and a system file)
           # \??\c:\temp\test.sys!\??\c:\winnt\system32\test.sys
           # http://technet.microsoft.com/en-us/library/cc960241.aspx
-          registry_value_exists?('HKLM\SYSTEM\CurrentControlSet\Control\Session Manager', { :name => "PendingFileRenameOperations" }) ||
+          registry_value_exists?('HKLM\SYSTEM\CurrentControlSet\Control\Session Manager', { name: "PendingFileRenameOperations" }) ||
 
-          # RebootRequired key contains Update IDs with a value of 1 if they require a reboot.
-          # The existence of RebootRequired alone is sufficient on my Windows 8.1 workstation in Windows Update
+            # RebootRequired key contains Update IDs with a value of 1 if they require a reboot.
+            # The existence of RebootRequired alone is sufficient on my Windows 8.1 workstation in Windows Update
             registry_key_exists?('HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') ||
 
-          # Vista + Server 2008 and newer may have reboots pending from CBS
+            # Vista + Server 2008 and newer may have reboots pending from CBS
             registry_key_exists?('HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending')
-        elsif platform?("ubuntu")
-          # This should work for Debian as well if update-notifier-common happens to be installed. We need an API for that.
-          File.exists?("/var/run/reboot-required")
+        elsif platform_family?("debian")
+          File.exist?("/var/run/reboot-required")
         else
           false
         end

@@ -1,6 +1,6 @@
 #
 # Author:: John Keiser (<jkeiser@chef.io>)
-# Copyright:: Copyright 2012-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +16,11 @@
 # limitations under the License.
 #
 
-require "chef/chef_fs/file_system/base_fs_object"
-require "chef/chef_fs/file_system/exceptions"
-require "chef/role"
-require "chef/node"
-require "chef/json_compat"
+require_relative "../base_fs_object"
+require_relative "../exceptions"
+require_relative "../../../role"
+require_relative "../../../node"
+require_relative "../../../json_compat"
 
 class Chef
   module ChefFS
@@ -72,7 +72,7 @@ class Chef
               begin
                 @this_object_cache = rest.get(api_path)
                 @exists = true
-              rescue Net::HTTPServerException => e
+              rescue Net::HTTPClientException => e
                 if e.response.code == "404"
                   @exists = false
                 else
@@ -91,7 +91,7 @@ class Chef
             rest.delete(api_path)
           rescue Timeout::Error => e
             raise Chef::ChefFS::FileSystem::OperationFailedError.new(:delete, self, e, "Timeout deleting: #{e}")
-          rescue Net::HTTPServerException => e
+          rescue Net::HTTPClientException => e
             if e.response.code == "404"
               raise Chef::ChefFS::FileSystem::NotFoundError.new(self, e)
             else
@@ -101,14 +101,14 @@ class Chef
 
           def read
             # Minimize the value (get rid of defaults) so the results don't look terrible
-            Chef::JSONCompat.to_json_pretty(minimize_value(_read_json))
+            Chef::JSONCompat.to_json_pretty(normalize_value(_read_json))
           end
 
           def _read_json
             @this_object_cache ? JSON.parse(@this_object_cache) : root.get_json(api_path)
           rescue Timeout::Error => e
             raise Chef::ChefFS::FileSystem::OperationFailedError.new(:read, self, e, "Timeout reading: #{e}")
-          rescue Net::HTTPServerException => e
+          rescue Net::HTTPClientException => e
             if $!.response.code == "404"
               raise Chef::ChefFS::FileSystem::NotFoundError.new(self, e)
             else
@@ -122,7 +122,11 @@ class Chef
           end
 
           def minimize_value(value)
-            data_handler.minimize(data_handler.normalize(value, self), self)
+            data_handler.minimize(normalize_value(value), self)
+          end
+
+          def normalize_value(value)
+            data_handler.normalize(value, self)
           end
 
           def compare_to(other)
@@ -177,7 +181,7 @@ class Chef
             if data_handler
               object = data_handler.normalize_for_put(object, self)
               data_handler.verify_integrity(object, self) do |error|
-                raise Chef::ChefFS::FileSystem::OperationFailedError.new(:write, self, nil, "#{error}")
+                raise Chef::ChefFS::FileSystem::OperationFailedError.new(:write, self, nil, error.to_s)
               end
             end
 
@@ -185,7 +189,7 @@ class Chef
               rest.put(api_path, object)
             rescue Timeout::Error => e
               raise Chef::ChefFS::FileSystem::OperationFailedError.new(:write, self, e, "Timeout writing: #{e}")
-            rescue Net::HTTPServerException => e
+            rescue Net::HTTPClientException => e
               if e.response.code == "404"
                 raise Chef::ChefFS::FileSystem::NotFoundError.new(self, e)
               else

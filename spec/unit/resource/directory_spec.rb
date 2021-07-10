@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Tyler Cloke (<tyler@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -38,7 +38,7 @@ describe Chef::Resource::Directory do
   it "accepts a string as the path" do
     expect { resource.path "/tmp" }.not_to raise_error
     expect(resource.path).to eql("/tmp")
-    expect { resource.path Hash.new }.to raise_error(ArgumentError)
+    expect { resource.path({}) }.to raise_error(ArgumentError)
   end
 
   it "allows you to have specify whether the action is recursive with true/false" do

@@ -1,7 +1,7 @@
 #
 # Author:: Adam Edwards (<adamed@chef.io>)
 # Author:: Jay Mundrawala (<jdm@chef.io>)
-# Copyright:: Copyright 2015-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -52,14 +52,14 @@ class Chef
         translated = x.inject([]) do |memo, (k, v)|
           memo << "#{k}=#{translate_type(v)}"
         end
-        "@{#{translated.join(';')}}"
+        "@{#{translated.join(";")}}"
       end
 
       def translate_array(x)
         translated = x.map do |v|
           translate_type(v)
         end
-        "@(#{translated.join(',')})"
+        "@(#{translated.join(",")})"
       end
 
       def unsafe?(s)

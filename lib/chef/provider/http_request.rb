@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "tempfile"
-require "chef/http/simple"
+require "tempfile" unless defined?(Tempfile)
+require_relative "../http/simple"
 
 class Chef
   class Provider
@@ -32,12 +32,12 @@ class Chef
       end
 
       # Send a HEAD request to new_resource.url
-      def action_head
+      action :head do
         message = check_message(new_resource.message)
         # CHEF-4762: we expect a nil return value from Chef::HTTP for a "200 Success" response
         # and false for a "304 Not Modified" response
         modified = @http.head(
-          "#{new_resource.url}",
+          (new_resource.url).to_s,
           new_resource.headers
         )
         logger.info("#{new_resource} HEAD to #{new_resource.url} successful")
@@ -49,12 +49,12 @@ class Chef
       end
 
       # Send a GET request to new_resource.url
-      def action_get
+      action :get do
         converge_by("#{new_resource} GET to #{new_resource.url}") do
 
           message = check_message(new_resource.message)
           body = @http.get(
-            "#{new_resource.url}",
+            (new_resource.url).to_s,
             new_resource.headers
           )
           logger.info("#{new_resource} GET to #{new_resource.url} successful")
@@ -63,11 +63,11 @@ class Chef
       end
 
       # Send a PATCH request to new_resource.url, with the message as the payload
-      def action_patch
+      action :patch do
         converge_by("#{new_resource} PATCH to #{new_resource.url}") do
           message = check_message(new_resource.message)
           body = @http.patch(
-            "#{new_resource.url}",
+            (new_resource.url).to_s,
             message,
             new_resource.headers
           )
@@ -77,11 +77,11 @@ class Chef
       end
 
       # Send a PUT request to new_resource.url, with the message as the payload
-      def action_put
+      action :put do
         converge_by("#{new_resource} PUT to #{new_resource.url}") do
           message = check_message(new_resource.message)
           body = @http.put(
-            "#{new_resource.url}",
+            (new_resource.url).to_s,
             message,
             new_resource.headers
           )
@@ -91,11 +91,11 @@ class Chef
       end
 
       # Send a POST request to new_resource.url, with the message as the payload
-      def action_post
+      action :post do
         converge_by("#{new_resource} POST to #{new_resource.url}") do
           message = check_message(new_resource.message)
           body = @http.post(
-            "#{new_resource.url}",
+            (new_resource.url).to_s,
             message,
             new_resource.headers
           )
@@ -105,10 +105,10 @@ class Chef
       end
 
       # Send a DELETE request to new_resource.url
-      def action_delete
+      action :delete do
         converge_by("#{new_resource} DELETE to #{new_resource.url}") do
           body = @http.delete(
-            "#{new_resource.url}",
+            (new_resource.url).to_s,
             new_resource.headers
           )
           new_resource.updated_by_last_action(true)
@@ -120,7 +120,7 @@ class Chef
       private
 
       def check_message(message)
-        if message.kind_of?(Proc)
+        if message.is_a?(Proc)
           message.call
         else
           message

@@ -1,7 +1,7 @@
 #
 # Author:: Jason J. W. Williams (<williamsjj@digitar.com>)
 # Author:: Stephen Nelson-Smith (<sns@chef.io>)
-# Copyright:: Copyright 2011-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,15 +18,15 @@
 #
 
 require "open3"
-require "chef/provider/package"
-require "chef/resource/package"
+require_relative "../package"
+require_relative "../../resource/package"
 
 class Chef
   class Provider
     class Package
       class Ips < Chef::Provider::Package
 
-        provides :package, platform: %w{openindiana opensolaris omnios solaris2}
+        provides :package, platform: %w{openindiana omnios solaris2}
         provides :ips_package
 
         attr_accessor :virtual
@@ -42,14 +42,14 @@ class Chef
         end
 
         def get_current_version
-          shell_out_compact_timeout("pkg", "info", new_resource.package_name).stdout.each_line do |line|
+          shell_out("pkg", "info", new_resource.package_name).stdout.each_line do |line|
             return $1.split[0] if line =~ /^\s+Version: (.*)/
           end
           nil
         end
 
         def get_candidate_version
-          shell_out_compact_timeout!("pkg", "info", "-r", new_resource.package_name).stdout.each_line do |line|
+          shell_out!("pkg", "info", "-r", new_resource.package_name).stdout.each_line do |line|
             return $1.split[0] if line =~ /Version: (.*)/
           end
           nil
@@ -58,7 +58,7 @@ class Chef
         def load_current_resource
           @current_resource = Chef::Resource::IpsPackage.new(new_resource.name)
           current_resource.package_name(new_resource.package_name)
-          logger.trace("Checking package status for #{new_resource.name}")
+          logger.trace("Checking package status for #{new_resource.package_name}")
           current_resource.version(get_current_version)
           @candidate_version = get_candidate_version
           current_resource
@@ -68,7 +68,7 @@ class Chef
           command = [ "pkg", options, "install", "-q" ]
           command << "--accept" if new_resource.accept_license
           command << "#{name}@#{version}"
-          shell_out_compact_timeout!(command)
+          shell_out!(command)
         end
 
         def upgrade_package(name, version)
@@ -77,7 +77,7 @@ class Chef
 
         def remove_package(name, version)
           package_name = "#{name}@#{version}"
-          shell_out_compact_timeout!( "pkg", options, "uninstall", "-q", package_name )
+          shell_out!( "pkg", options, "uninstall", "-q", package_name )
         end
       end
     end

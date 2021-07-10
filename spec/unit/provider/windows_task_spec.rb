@@ -1,6 +1,6 @@
 #
 # Author:: Nimisha Sharad (<nimisha.sharad@msystechnologies.com>)
-# Copyright:: Copyright 2008-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,15 +18,16 @@
 
 require "spec_helper"
 
-describe Chef::Provider::WindowsTask, :windows_only do
-  let(:new_resource) { Chef::Resource::WindowsTask.new("sample_task") }
-  let(:current_resource) { Chef::Resource::WindowsTask.new() }
+describe "windows_task provider", :windows_only do
+  let(:new_resource) { Chef::Resource::WindowsTask.new("sample_task", run_context) }
+  let(:current_resource) { Chef::Resource::WindowsTask.new }
+
+  let(:run_context) do
+    Chef::RunContext.new(Chef::Node.new, {}, Chef::EventDispatch::Dispatcher.new)
+  end
 
   let(:provider) do
-    node = Chef::Node.new
-    events = Chef::EventDispatch::Dispatcher.new
-    run_context = Chef::RunContext.new(node, {}, events)
-    Chef::Provider::WindowsTask.new(new_resource, run_context)
+    new_resource.provider_for_action(:create)
   end
 
   describe "#load_current_resource" do
@@ -70,20 +71,20 @@ describe Chef::Provider::WindowsTask, :windows_only do
       new_resource.frequency_modifier 15
       new_resource.random_delay 60
       result = {
-        :start_year => 2017,
-        :start_month => 12,
-        :start_day => 2,
-        :start_hour => 17,
-        :start_minute => 30,
-        :end_month => 0,
-        :end_day => 0,
-        :end_year => 0,
-        :trigger_type => 1,
-        :type => { :once => nil },
-        :random_minutes_interval => 60,
-        :minutes_interval => 15,
-        :run_on_last_day_of_month => false,
-        :run_on_last_week_of_month => false
+        start_year: 2017,
+        start_month: 12,
+        start_day: 2,
+        start_hour: 17,
+        start_minute: 30,
+        end_month: 0,
+        end_day: 0,
+        end_year: 0,
+        trigger_type: 1,
+        type: { once: nil },
+        random_minutes_interval: 60,
+        minutes_interval: 15,
+        run_on_last_day_of_month: false,
+        run_on_last_week_of_month: false,
 
       }
       expect(provider.send(:trigger)).to eq(result)
@@ -145,7 +146,7 @@ describe Chef::Provider::WindowsTask, :windows_only do
       new_resource.frequency_modifier 2
       result = provider.send(:type)
       expect(result).to include(:once)
-      expect(result).to eq({ :once => nil })
+      expect(result).to eq({ once: nil })
     end
 
     it "returns type hash when frequency :daily" do
@@ -265,8 +266,13 @@ describe Chef::Provider::WindowsTask, :windows_only do
 
   # REF: https://msdn.microsoft.com/en-us/library/windows/desktop/aa382063(v=vs.85).aspx
   describe "#days_of_month" do
-    it "returns the binary value 1 if day is set as 1" do
+    it "returns the binary value 1 if day is set as string 1" do
       new_resource.day "1"
+      expect(provider.send(:days_of_month)).to eq(1)
+    end
+
+    it "returns the binary value 1 if day is set as integer 1" do
+      new_resource.day 1
       expect(provider.send(:days_of_month)).to eq(1)
     end
 
@@ -286,7 +292,7 @@ describe Chef::Provider::WindowsTask, :windows_only do
     end
   end
 
-  #Ref : https://msdn.microsoft.com/en-us/library/windows/desktop/aa380729(v=vs.85).aspx
+  # Ref : https://msdn.microsoft.com/en-us/library/windows/desktop/aa380729(v=vs.85).aspx
   describe "#days_of_week" do
     it "returns the binary value 2 if day is set as 'Mon'" do
       new_resource.day "Mon"
@@ -416,6 +422,7 @@ describe Chef::Provider::WindowsTask, :windows_only do
     end
 
     it "return logon_type bindary value as 1 as if password is not nil" do
+      new_resource.user = "Administrator"
       new_resource.password = "abc"
       expect(provider.send(:logon_type)).to be(1)
     end

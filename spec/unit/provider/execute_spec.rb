@@ -1,6 +1,6 @@
 #
 # Author:: Prajakta Purohit (<prajakta@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,14 +26,15 @@ describe Chef::Provider::Execute do
   let(:provider) { Chef::Provider::Execute.new(new_resource, run_context) }
   let(:current_resource) { Chef::Resource::Ifconfig.new("foo_resource", run_context) }
   # You will be the same object, I promise.
-  @live_stream = Chef::EventDispatch::EventsOutputStream.new(run_context.events, :name => :execute)
+  @live_stream = Chef::EventDispatch::EventsOutputStream.new(Chef::EventDispatch::Dispatcher.new, name: :execute)
 
   let(:opts) do
     {
-      timeout:      3600,
-      returns:      0,
-      log_level:    :info,
-      log_tag:      new_resource.to_s,
+      timeout: 3600,
+      returns: 0,
+      log_level: :info,
+      default_env: false,
+      log_tag: new_resource.to_s,
     }
   end
 
@@ -41,16 +42,9 @@ describe Chef::Provider::Execute do
 
   before do
     allow(Chef::EventDispatch::EventsOutputStream).to receive(:new) { @live_stream }
-    allow(ChefConfig).to receive(:windows?) { false }
-    @original_log_level = Chef::Log.level
+    allow(ChefUtils).to receive(:windows?) { false }
     Chef::Log.level = :info
     allow(STDOUT).to receive(:tty?).and_return(false)
-  end
-
-  after do
-    Chef::Log.level = @original_log_level
-    Chef::Config[:always_stream_execute] = false
-    Chef::Config[:daemon] = false
   end
 
   describe "#initialize" do
@@ -76,7 +70,7 @@ describe Chef::Provider::Execute do
 
   describe "#action_run" do
     it "runs shell_out with the default options" do
-      expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.name, opts)
+      expect(provider).to receive(:shell_out!).with(new_resource.name, opts)
       expect(provider).to receive(:converge_by).with("execute foo_resource").and_call_original
       expect(Chef::Log).not_to receive(:warn)
       provider.run_action(:run)
@@ -101,20 +95,20 @@ describe Chef::Provider::Execute do
       expect(new_resource).to be_updated
     end
 
-    it "if you pass a command attribute, it runs the command" do
+    it "if you pass a command property, it runs the command" do
       new_resource.command "/usr/argelbargle/bin/oogachacka 12345"
-      expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.command, opts)
+      expect(provider).to receive(:shell_out!).with(new_resource.command, opts)
       expect(provider).to receive(:converge_by).with("execute #{new_resource.command}").and_call_original
       expect(Chef::Log).not_to receive(:warn)
       provider.run_action(:run)
       expect(new_resource).to be_updated
     end
 
-    it "should honor sensitive attribute" do
+    it "should honor sensitive property" do
       new_resource.sensitive true
       # Since the resource is sensitive, it should not have :live_stream set
       opts.delete(:live_stream)
-      expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.name, opts)
+      expect(provider).to receive(:shell_out!).with(new_resource.name, opts)
       expect(provider).to receive(:converge_by).with("execute sensitive resource").and_call_original
       expect(Chef::Log).not_to receive(:warn)
       provider.run_action(:run)
@@ -124,7 +118,7 @@ describe Chef::Provider::Execute do
     it "should do nothing if the sentinel file exists" do
       new_resource.creates "/foo_resource"
       expect(FileTest).to receive(:exist?).with(new_resource.creates).and_return(true)
-      expect(provider).not_to receive(:shell_out_with_systems_locale!)
+      expect(provider).not_to receive(:shell_out!)
       expect(Chef::Log).not_to receive(:warn)
       provider.run_action(:run)
       expect(new_resource).not_to be_updated
@@ -137,7 +131,7 @@ describe Chef::Provider::Execute do
       end
 
       it "should raise if user specified relative path without cwd for Chef-13" do
-        expect(provider).not_to receive(:shell_out_with_systems_locale!)
+        expect(provider).not_to receive(:shell_out!)
         expect { provider.run_action(:run) }.to raise_error(Chef::Exceptions::Execute)
       end
     end
@@ -148,7 +142,7 @@ describe Chef::Provider::Execute do
       expect(FileTest).not_to receive(:exist?).with(new_resource.creates)
       expect(FileTest).to receive(:exist?).with(File.join("/tmp", new_resource.creates)).and_return(true)
       expect(Chef::Log).not_to receive(:warn)
-      expect(provider).not_to receive(:shell_out_with_systems_locale!)
+      expect(provider).not_to receive(:shell_out!)
 
       provider.run_action(:run)
       expect(new_resource).not_to be_updated
@@ -157,7 +151,7 @@ describe Chef::Provider::Execute do
     it "should not include stdout/stderr in failure exception for sensitive resource" do
       opts.delete(:live_stream)
       new_resource.sensitive true
-      expect(provider).to receive(:shell_out_with_systems_locale!).and_raise(Mixlib::ShellOut::ShellCommandFailed)
+      expect(provider).to receive(:shell_out!).and_raise(Mixlib::ShellOut::ShellCommandFailed)
       expect do
         provider.run_action(:run)
       end.to raise_error(Mixlib::ShellOut::ShellCommandFailed, /suppressed for sensitive resource/)
@@ -166,7 +160,7 @@ describe Chef::Provider::Execute do
     describe "streaming output" do
       it "should not set the live_stream if sensitive is on" do
         new_resource.sensitive true
-        expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.name, opts)
+        expect(provider).to receive(:shell_out!).with(new_resource.name, opts)
         expect(provider).to receive(:converge_by).with("execute sensitive resource").and_call_original
         expect(Chef::Log).not_to receive(:warn)
         provider.run_action(:run)
@@ -183,7 +177,7 @@ describe Chef::Provider::Execute do
         it "should set the live_stream if the log level is info or above" do
           nopts = opts
           nopts[:live_stream] = @live_stream
-          expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.name, nopts)
+          expect(provider).to receive(:shell_out!).with(new_resource.name, nopts)
           expect(provider).to receive(:converge_by).with("execute foo_resource").and_call_original
           expect(Chef::Log).not_to receive(:warn)
           provider.run_action(:run)
@@ -195,7 +189,7 @@ describe Chef::Provider::Execute do
           new_resource.live_stream true
           nopts = opts
           nopts[:live_stream] = @live_stream
-          expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.name, nopts)
+          expect(provider).to receive(:shell_out!).with(new_resource.name, nopts)
           expect(provider).to receive(:converge_by).with("execute foo_resource").and_call_original
           expect(Chef::Log).not_to receive(:warn)
           provider.run_action(:run)
@@ -204,7 +198,7 @@ describe Chef::Provider::Execute do
 
         it "should not set the live_stream if the resource is sensitive" do
           new_resource.sensitive true
-          expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.name, opts)
+          expect(provider).to receive(:shell_out!).with(new_resource.name, opts)
           expect(provider).to receive(:converge_by).with("execute sensitive resource").and_call_original
           expect(Chef::Log).not_to receive(:warn)
           provider.run_action(:run)
@@ -217,7 +211,7 @@ describe Chef::Provider::Execute do
           nopts = opts
           nopts[:live_stream] = STDOUT
           allow(STDOUT).to receive(:tty?).and_return(true)
-          expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.name, nopts)
+          expect(provider).to receive(:shell_out!).with(new_resource.name, nopts)
           expect(provider).to receive(:converge_by).with("execute foo_resource").and_call_original
           expect(Chef::Log).not_to receive(:warn)
           provider.run_action(:run)
@@ -227,7 +221,7 @@ describe Chef::Provider::Execute do
         it "should not set the live_stream to STDOUT if we are a TTY, not daemonized, but sensitive" do
           new_resource.sensitive true
           allow(STDOUT).to receive(:tty?).and_return(true)
-          expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.name, opts)
+          expect(provider).to receive(:shell_out!).with(new_resource.name, opts)
           expect(provider).to receive(:converge_by).with("execute sensitive resource").and_call_original
           expect(Chef::Log).not_to receive(:warn)
           provider.run_action(:run)
@@ -237,7 +231,7 @@ describe Chef::Provider::Execute do
         it "should not set the live_stream to STDOUT if we are a TTY, but daemonized" do
           Chef::Config[:daemon] = true
           allow(STDOUT).to receive(:tty?).and_return(true)
-          expect(provider).to receive(:shell_out_with_systems_locale!).with(new_resource.name, opts)
+          expect(provider).to receive(:shell_out!).with(new_resource.name, opts)
           expect(provider).to receive(:converge_by).with("execute foo_resource").and_call_original
           expect(Chef::Log).not_to receive(:warn)
           provider.run_action(:run)

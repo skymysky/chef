@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -85,7 +85,7 @@ describe Chef::Resource::File do
   it "accepts a string as the path" do
     expect { resource.path "/tmp" }.not_to raise_error
     expect(resource.path).to eql("/tmp")
-    expect { resource.path Hash.new }.to raise_error(ArgumentError)
+    expect { resource.path({}) }.to raise_error(ArgumentError)
   end
 
   describe "when it has a path, owner, group, mode, and checksum" do
@@ -113,15 +113,15 @@ describe Chef::Resource::File do
 
   end
 
-  describe "when access controls are set on windows", :windows_only => true do
+  describe "when access controls are set on windows", windows_only: true do
     before do
       resource.rights :read, "Everyone"
       resource.rights :full_control, "DOMAIN\User"
     end
-    it "describes its state including windows ACL attributes" do
+    it "describes its state including windows ACL properties" do
       state = resource.state_for_resource_reporter
-      expect(state[:rights]).to eq([ { :permissions => :read, :principals => "Everyone" },
-                               { :permissions => :full_control, :principals => "DOMAIN\User" } ])
+      expect(state[:rights]).to eq([ { permissions: :read, principals: "Everyone" },
+                               { permissions: :full_control, principals: "DOMAIN\User" } ])
     end
   end
 end

@@ -2,7 +2,7 @@
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Christopher Walters (<cw@chef.io>)
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,9 +18,9 @@
 # limitations under the License.
 #
 
-require "chef/provider"
-require "chef/dsl/recipe"
-require "chef/dsl/include_recipe"
+require_relative "../provider"
+require_relative "../dsl/recipe"
+require_relative "../dsl/include_recipe"
 
 class Chef
   class Provider
@@ -42,11 +42,10 @@ class Chef
       # no-op `load_current_resource`. Allows simple LWRP providers to work
       # without defining this method explicitly (silences
       # Chef::Exceptions::Override exception)
-      def load_current_resource
-      end
+      def load_current_resource; end
 
       # class methods
-      class <<self
+      class << self
         include Chef::Mixin::ConvertToClassName
         include Chef::Mixin::FromFile
 

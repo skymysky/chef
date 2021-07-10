@@ -20,10 +20,10 @@
 # limitations under the License.
 #
 
-require "chef/resource/package"
-require "chef/provider/package"
-require "chef/mixin/get_source_from_package"
-require "chef/exceptions"
+require_relative "../../resource/package"
+require_relative "../package"
+require_relative "../../mixin/get_source_from_package"
+require_relative "../../exceptions"
 
 class Chef
   class Provider
@@ -53,11 +53,11 @@ class Chef
           # Below are incomplete/missing features for this package provider
           requirements.assert(:all_actions) do |a|
             a.assertion { !new_resource.source }
-            a.failure_message(Chef::Exceptions::Package, "The openbsd package provider does not support the source attribute")
+            a.failure_message(Chef::Exceptions::Package, "The openbsd package provider does not support the source property")
           end
           requirements.assert(:all_actions) do |a|
             a.assertion do
-              if new_resource.package_name =~ /^(.+?)--(.+)/
+              if /^(.+?)--(.+)/.match?(new_resource.package_name)
                 !new_resource.version
               else
                 true
@@ -72,7 +72,7 @@ class Chef
             if parts = name.match(/^(.+?)--(.+)/) # use double-dash for stems with flavors, see man page for pkg_add
               name = parts[1]
             end
-            shell_out_compact_timeout!("pkg_add", "-r", package_string(name, version), env: { "PKG_PATH" => pkg_path }).status
+            shell_out!("pkg_add", "-r", package_string(name, version), env: { "PKG_PATH" => pkg_path }).status
             logger.trace("#{new_resource.package_name} installed")
           end
         end
@@ -81,7 +81,7 @@ class Chef
           if parts = name.match(/^(.+?)--(.+)/)
             name = parts[1]
           end
-          shell_out_compact_timeout!("pkg_delete", package_string(name, version), env: nil).status
+          shell_out!("pkg_delete", package_string(name, version), env: nil).status
         end
 
         private
@@ -92,7 +92,7 @@ class Chef
                  else
                    new_resource.package_name
                  end
-          pkg_info = shell_out_compact_timeout!("pkg_info", "-e", "#{name}->0", env: nil, returns: [0, 1])
+          pkg_info = shell_out!("pkg_info", "-e", "#{name}->0", env: nil, returns: [0, 1])
           result = pkg_info.stdout[/^inst:#{Regexp.escape(name)}-(.+?)\s/, 1]
           logger.trace("installed_version of '#{new_resource.package_name}' is '#{result}'")
           result
@@ -101,7 +101,7 @@ class Chef
         def candidate_version
           @candidate_version ||= begin
             results = []
-            shell_out_compact_timeout!("pkg_info", "-I", package_string(new_resource.package_name, new_resource.version), env: nil, returns: [0, 1]).stdout.each_line do |line|
+            shell_out!("pkg_info", "-I", package_string(new_resource.package_name, new_resource.version), env: nil, returns: [0, 1]).stdout.each_line do |line|
               results << if parts = new_resource.package_name.match(/^(.+?)--(.+)/)
                            line[/^#{Regexp.escape(parts[1])}-(.+?)\s/, 1]
                          else
@@ -116,7 +116,7 @@ class Chef
             when 1
               results[0]
             else
-              raise Chef::Exceptions::Package, "#{new_resource.name} has multiple matching candidates. Please use a more specific name" if results.length > 1
+              raise Chef::Exceptions::Package, "#{new_resource.package_name} has multiple matching candidates. Please use a more specific name" if results.length > 1
             end
           end
         end
@@ -130,7 +130,7 @@ class Chef
         end
 
         def pkg_path
-          ENV["PKG_PATH"] || "http://ftp.OpenBSD.org/pub/#{node['kernel']['name']}/#{node['kernel']['release']}/packages/#{node['kernel']['machine']}/"
+          ENV["PKG_PATH"] || "http://ftp.OpenBSD.org/pub/#{node["kernel"]["name"]}/#{node["kernel"]["release"]}/packages/#{node["kernel"]["machine"]}/"
         end
 
       end

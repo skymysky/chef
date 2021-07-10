@@ -1,6 +1,6 @@
 #
 # Author:: Bryan McLellan <btm@loftninjas.org>
-# Copyright:: Copyright 2014-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,7 +36,7 @@ describe Chef::DSL::RebootPending do
         end
 
         it 'should return true if "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\PendingFileRenameOperations" exists' do
-          allow(recipe).to receive(:registry_value_exists?).with('HKLM\SYSTEM\CurrentControlSet\Control\Session Manager', { :name => "PendingFileRenameOperations" }).and_return(true)
+          allow(recipe).to receive(:registry_value_exists?).with('HKLM\SYSTEM\CurrentControlSet\Control\Session Manager', { name: "PendingFileRenameOperations" }).and_return(true)
           expect(recipe.reboot_pending?).to be_truthy
         end
 
@@ -51,18 +51,18 @@ describe Chef::DSL::RebootPending do
         end
       end
 
-      context "platform is ubuntu" do
+      context "platform_family is debian" do
         before do
-          allow(recipe).to receive(:platform?).with("ubuntu").and_return(true)
+          allow(recipe).to receive(:platform_family?).with("debian").and_return(true)
         end
 
         it "should return true if /var/run/reboot-required exists" do
-          allow(File).to receive(:exists?).with("/var/run/reboot-required").and_return(true)
+          allow(File).to receive(:exist?).with("/var/run/reboot-required").and_return(true)
           expect(recipe.reboot_pending?).to be_truthy
         end
 
         it "should return false if /var/run/reboot-required does not exist" do
-          allow(File).to receive(:exists?).with("/var/run/reboot-required").and_return(false)
+          allow(File).to receive(:exist?).with("/var/run/reboot-required").and_return(false)
           expect(recipe.reboot_pending?).to be_falsey
         end
       end

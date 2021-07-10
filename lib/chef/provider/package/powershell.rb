@@ -1,5 +1,5 @@
 # Author:: Dheeraj Dubey(dheeraj.dubey@msystechnologies.com)
-# Copyright:: Copyright 2015-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,9 @@
 # limitations under the License.
 #
 
-require "chef/provider/package"
-require "chef/resource/powershell_package"
-require "chef/mixin/powershell_out"
+require_relative "../package"
+require_relative "../../resource/powershell_package"
+require_relative "../../mixin/powershell_out"
 
 class Chef
   class Provider
@@ -36,13 +36,14 @@ class Chef
 
         def define_resource_requirements
           super
-          if powershell_out("$PSVersionTable.PSVersion.Major").stdout.strip.to_i < 5
-            raise "Minimum installed Powershell Version required is 5"
+          if powershell_version < 5
+            raise "Minimum installed PowerShell Version required is 5"
           end
+
           requirements.assert(:install) do |a|
             a.assertion { candidates_exist_for_all_uninstalled? }
-            a.failure_message(Chef::Exceptions::Package, "No candidate version available for #{packages_missing_candidates.join(', ')}")
-            a.whyrun("Assuming a repository that offers #{packages_missing_candidates.join(', ')} would have been configured")
+            a.failure_message(Chef::Exceptions::Package, "No candidate version available for #{packages_missing_candidates.join(", ")}")
+            a.whyrun("Assuming a repository that offers #{packages_missing_candidates.join(", ")} would have been configured")
           end
         end
 
@@ -53,7 +54,9 @@ class Chef
         # Installs the package specified with the version passed else latest version will be installed
         def install_package(names, versions)
           names.each_with_index do |name, index|
-            powershell_out(build_powershell_package_command("Install-Package '#{name}'", versions[index]), timeout: new_resource.timeout)
+            cmd = powershell_out(build_powershell_package_command("Install-Package '#{name}'", versions[index]), timeout: new_resource.timeout)
+            next if cmd.nil?
+            raise Chef::Exceptions::PowershellCmdletException, "Failed to install package due to catalog signing error, use skip_publisher_check to force install" if /SkipPublisherCheck/.match?(cmd.stderr)
           end
         end
 
@@ -110,12 +113,22 @@ class Chef
 
         def build_powershell_package_command(command, version = nil)
           command = [command] unless command.is_a?(Array)
+          cmdlet_name = command.first
           command.unshift("(")
-          %w{-Force -ForceBootstrap}.each do |arg|
+          # PowerShell Gallery requires tls 1.2
+          command.unshift("if ([Net.ServicePointManager]::SecurityProtocol -lt [Net.SecurityProtocolType]::Tls12) { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 };")
+          # -WarningAction SilentlyContinue is used to suppress the warnings from stdout
+          %w{-Force -ForceBootstrap -WarningAction SilentlyContinue}.each do |arg|
             command.push(arg)
           end
           command.push("-RequiredVersion #{version}") if version
-          command.push("-Source #{new_resource.source}") if new_resource.source && command[1] =~ Regexp.union(/Install-Package/, /Find-Package/)
+          command.push("-Source #{new_resource.source}") if new_resource.source && cmdlet_name =~ Regexp.union(/Install-Package/, /Find-Package/)
+          command.push("-SkipPublisherCheck") if new_resource.skip_publisher_check && cmdlet_name !~ /Find-Package/
+          if new_resource.options && cmdlet_name !~ Regexp.union(/Get-Package/, /Find-Package/)
+            new_resource.options.each do |arg|
+              command.push(arg) unless command.include?(arg)
+            end
+          end
           command.push(").Version")
           command.join(" ")
         end

@@ -1,16 +1,18 @@
 
+require "spec_helper"
 require "support/shared/integration/integration_helper"
 require "chef/mixin/shell_out"
 require "tiny_server"
 require "tmpdir"
 require "chef/platform"
+require "chef-utils/dist"
 
 describe "chef-client" do
 
   include IntegrationSupport
   include Chef::Mixin::ShellOut
 
-  let(:chef_dir) { File.join(File.dirname(__FILE__), "..", "..", "..", "bin") }
+  let(:chef_dir) { File.join(__dir__, "..", "..", "..") }
 
   # Invoke `chef-client` as `ruby PATH/TO/chef-client`. This ensures the
   # following constraints are satisfied:
@@ -21,31 +23,23 @@ describe "chef-client" do
   # machine that has omnibus chef installed. In that case we need to ensure
   # we're running `chef-client` from the source tree and not the external one.
   # cf. CHEF-4914
-  let(:chef_client) { "ruby '#{chef_dir}/chef-client' --no-fork --minimal-ohai" }
+  let(:chef_client) { "bundle exec #{ChefUtils::Dist::Infra::CLIENT} --no-fork --minimal-ohai" }
 
   let(:critical_env_vars) { %w{PATH RUBYOPT BUNDLE_GEMFILE GEM_PATH}.map { |o| "#{o}=#{ENV[o]}" } .join(" ") }
 
   when_the_repository "uses RFC 062 defined exit codes" do
 
     def setup_client_rb
-      file "config/client.rb", <<EOM
-local_mode true
-cookbook_path "#{path_to('cookbooks')}"
-EOM
-    end
-
-    def setup_client_rb_with_audit_mode
-      file "config/client.rb", <<EOM
-local_mode true
-cookbook_path "#{path_to('cookbooks')}"
-audit_mode :audit_only
-EOM
+      file "config/client.rb", <<~EOM
+        local_mode true
+        cookbook_path "#{path_to("cookbooks")}"
+      EOM
     end
 
     def run_chef_client_and_expect_exit_code(exit_code)
-      shell_out!("#{chef_client} -c \"#{path_to('config/client.rb')}\" -o 'x::default'",
-        :cwd => chef_dir,
-        :returns => [exit_code])
+      shell_out!("#{chef_client} -c \"#{path_to("config/client.rb")}\" -o 'x::default'",
+        cwd: chef_dir,
+        returns: [exit_code])
     end
 
     context "has a cookbook" do
@@ -59,25 +53,6 @@ EOM
           it "exits with GENERIC_FAILURE, 1" do
             setup_client_rb
             run_chef_client_and_expect_exit_code 1
-          end
-        end
-      end
-
-      context "with an audit recipe" do
-        context "which fails" do
-          before do
-            file "cookbooks/x/recipes/default.rb", <<-RECIPE
-control_group "control group without top level control" do
-  it "should fail" do
-    expect(4 - 4).to eq(1)
-  end
-end
-RECIPE
-          end
-
-          it "exits with AUDIT_MODE_FAILURE, 42" do
-            setup_client_rb_with_audit_mode
-            run_chef_client_and_expect_exit_code 42
           end
         end
       end
@@ -112,9 +87,9 @@ RECIPE
 
         context "when a reboot exception is raised (like from the reboot resource)" do
           before do
-            file "cookbooks/x/recipes/default.rb", <<EOM
-raise Chef::Exceptions::Reboot.new
-EOM
+            file "cookbooks/x/recipes/default.rb", <<~EOM
+              raise Chef::Exceptions::Reboot.new
+            EOM
           end
 
           it "exits with REBOOT_SCHEDULED, 35" do
@@ -125,9 +100,9 @@ EOM
 
         context "when an attempt to reboot fails (like from the reboot resource)" do
           before do
-            file "cookbooks/x/recipes/default.rb", <<EOM
-raise Chef::Exceptions::RebootFailed.new
-EOM
+            file "cookbooks/x/recipes/default.rb", <<~EOM
+              raise Chef::Exceptions::RebootFailed.new
+            EOM
           end
 
           it "exits with REBOOT_FAILED, 41" do

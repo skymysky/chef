@@ -2,7 +2,7 @@
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Daniel DeLeo (<dan@chef.io>)
 # Author:: Dave Eddy (<dave@daveeddy.com>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # Copyright:: Copyright 2015-2016, Dave Eddy
 #
 # License:: Apache License, Version 2.0
@@ -20,7 +20,6 @@
 # limitations under the License.
 #
 
-require "mixlib/shellout"
 require "spec_helper"
 
 describe Chef::Provider::User::Solaris do
@@ -58,7 +57,7 @@ describe Chef::Provider::User::Solaris do
 
     it "should use its own shadow file writer to set the password" do
       expect(provider).to receive(:write_shadow_file)
-      allow(provider).to receive(:shell_out!).and_return(true)
+      allow(provider).to receive(:shell_out_compacted!).and_return(true)
       provider.manage_user
     end
 
@@ -69,7 +68,7 @@ describe Chef::Provider::User::Solaris do
       password_file.puts "adam:existingpassword:15441::::::"
       password_file.close
       stub_const("Chef::Provider::User::Solaris::PASSWORD_FILE", password_file.path)
-      allow(provider).to receive(:shell_out!).and_return(true)
+      allow(provider).to receive(:shell_out_compacted!).and_return(true)
       # may not be able to write to /etc for tests...
       temp_file = Tempfile.new("shadow")
       allow(Tempfile).to receive(:new).with("shadow", "/etc").and_return(temp_file)
@@ -84,7 +83,7 @@ describe Chef::Provider::User::Solaris do
     context "with a system user" do
       before { new_resource.system(true) }
       it "should not pass -r" do
-        expect(provider).to receive(:shell_out!).with("useradd", "adam")
+        expect(provider).to receive(:shell_out_compacted!).with( "useradd", "adam")
         provider.create_user
       end
     end
@@ -92,7 +91,7 @@ describe Chef::Provider::User::Solaris do
     context "with manage_home" do
       before { new_resource.manage_home(true) }
       it "should not pass -r" do
-        expect(provider).to receive(:shell_out!).with("useradd", "-m", "adam")
+        expect(provider).to receive(:shell_out_compacted!).with( "useradd", "-m", "adam")
         provider.create_user
       end
     end
@@ -162,7 +161,7 @@ describe Chef::Provider::User::Solaris do
     describe "when locking the user" do
       it "should run passwd -l with the new resources username" do
         shell_return = shellcmdresult.new("", "", 0)
-        expect(provider).to receive(:shell_out!).with("passwd", "-l", "adam").and_return(shell_return)
+        expect(provider).to receive(:shell_out_compacted!).with("passwd", "-l", "adam").and_return(shell_return)
         provider.lock_user
       end
     end
@@ -170,7 +169,7 @@ describe Chef::Provider::User::Solaris do
     describe "when unlocking the user" do
       it "should run passwd -u with the new resources username" do
         shell_return = shellcmdresult.new("", "", 0)
-        expect(provider).to receive(:shell_out!).with("passwd", "-u", "adam").and_return(shell_return)
+        expect(provider).to receive(:shell_out_compacted!).with("passwd", "-u", "adam").and_return(shell_return)
         provider.unlock_user
       end
     end

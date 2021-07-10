@@ -1,6 +1,6 @@
 #
 # Author:: AJ Christensen (<aj@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,14 +16,13 @@
 # limitations under the License.
 #
 
-require "chef/provider/group/groupadd"
-require "etc"
+require_relative "groupadd"
+require "etc" unless defined?(Etc)
 
 class Chef
   class Provider
     class Group
       class Suse < Chef::Provider::Group::Groupadd
-        provides :group, platform: "opensuse", platform_version: "< 12.3"
         provides :group, platform: "suse", platform_version: "< 12.0"
 
         def load_current_resource
@@ -40,14 +39,14 @@ class Chef
 
           requirements.assert(:create, :manage, :modify) do |a|
             a.assertion do
-              begin
-                to_add(new_resource.members).all? { |member| Etc.getpwnam(member) }
-              rescue
-                false
-              end
+
+              to_add(new_resource.members).all? { |member| Etc.getpwnam(member) }
+            rescue
+              false
+
             end
-            a.failure_message Chef::Exceptions::Group, "Could not add users #{to_add(new_resource.members).join(', ')} to #{new_resource.group_name}: one of these users does not exist"
-            a.whyrun "Could not find one of these users: #{to_add(new_resource.members).join(', ')}. Assuming it will be created by a prior step"
+            a.failure_message Chef::Exceptions::Group, "Could not add users #{to_add(new_resource.members).join(", ")} to #{new_resource.group_name}: one of these users does not exist"
+            a.whyrun "Could not find one of these users: #{to_add(new_resource.members).join(", ")}. Assuming it will be created by a prior step"
           end
         end
 
@@ -66,7 +65,7 @@ class Chef
         end
 
         def add_member(member)
-          shell_out_compact!("groupmod", "-A", member, new_resource.group_name)
+          shell_out!("groupmod", "-A", member, new_resource.group_name)
         end
 
         def to_remove(members)
@@ -74,7 +73,7 @@ class Chef
         end
 
         def remove_member(member)
-          shell_out_compact!("groupmod", "-R", member, new_resource.group_name)
+          shell_out!("groupmod", "-R", member, new_resource.group_name)
         end
 
       end

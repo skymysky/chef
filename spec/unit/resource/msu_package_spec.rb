@@ -1,6 +1,6 @@
 #
 # Author:: Nimisha Sharad (<nimisha.sharad@msystechnologies.com>)
-# Copyright:: Copyright 2008-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -59,5 +59,9 @@ describe Chef::Resource::MsuPackage do
   it "coerces source property if it does not looks like a path" do
     resource.source("package.msu")
     expect(resource.source).not_to eq("package.msu")
+  end
+
+  it "sets timeout property to 3600 by default" do
+    expect(resource.timeout).to eql(3600)
   end
 end

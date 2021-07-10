@@ -2,7 +2,7 @@
 # Author:: Stephen Nelson-Smith (<sns@chef.io>)
 # Author:: Jon Ramsey (<jonathon.ramsey@gmail.com>)
 # Author:: Dave Eddy (<dave@daveeddy.com>)
-# Copyright:: Copyright 2012-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # Copyright:: Copyright 2015-2016, Dave Eddy
 # License:: Apache License, Version 2.0
 #
@@ -18,30 +18,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "chef/provider/user"
+require_relative "../user"
 
 class Chef
   class Provider
     class User
       class Solaris < Chef::Provider::User
         provides :solaris_user
-        provides :user, os: %w{openindiana opensolaris illumos omnios solaris2 smartos}
+        provides :user, os: %w{openindiana illumos omnios solaris2 smartos}
 
-        PASSWORD_FILE = "/etc/shadow"
+        PASSWORD_FILE = "/etc/shadow".freeze
 
         def create_user
-          shell_out_compact!("useradd", universal_options, useradd_options, new_resource.username)
+          shell_out!("useradd", universal_options, useradd_options, new_resource.username)
           manage_password
         end
 
         def manage_user
           manage_password
           return if universal_options.empty? && usermod_options.empty?
-          shell_out_compact!("usermod", universal_options, usermod_options, new_resource.username)
+
+          shell_out!("usermod", universal_options, usermod_options, new_resource.username)
         end
 
         def remove_user
-          shell_out_compact!("userdel", userdel_options, new_resource.username)
+          shell_out!("userdel", userdel_options, new_resource.username)
         end
 
         def check_lock
@@ -56,11 +57,11 @@ class Chef
         end
 
         def lock_user
-          shell_out_compact!("passwd", "-l", new_resource.username)
+          shell_out!("passwd", "-l", new_resource.username)
         end
 
         def unlock_user
-          shell_out_compact!("passwd", "-u", new_resource.username)
+          shell_out!("passwd", "-u", new_resource.username)
         end
 
         private
@@ -112,11 +113,12 @@ class Chef
 
         def manage_password
           return unless current_resource.password != new_resource.password && new_resource.password
+
           logger.trace("#{new_resource} setting password to #{new_resource.password}")
           write_shadow_file
         end
 
-        # XXX: this was straight copypasta'd back in 2013 and I don't think we've ever evaluted using
+        # XXX: this was straight copypasta'd back in 2013 and I don't think we've ever evaluated using
         # a pipe to passwd(1) or evaluating modern ruby-shadow.  See https://github.com/chef/chef/pull/721
         def write_shadow_file
           buffer = Tempfile.new("shadow", "/etc")

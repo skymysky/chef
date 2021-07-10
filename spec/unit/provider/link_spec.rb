@@ -1,7 +1,7 @@
 #
 # Author:: AJ Christensen (<aj@junglist.gen.nz>)
 # Author:: John Keiser (<jkeiser@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,8 +21,8 @@ require "ostruct"
 
 require "spec_helper"
 
-if Chef::Platform.windows?
-  require "chef/win32/file" #probably need this in spec_helper
+if ChefUtils.windows?
+  require "chef/win32/file" # probably need this in spec_helper
 end
 
 describe Chef::Resource::Link do
@@ -41,12 +41,12 @@ describe Chef::Resource::Link do
   end
 
   def canonicalize(path)
-    Chef::Platform.windows? ? path.tr("/", '\\') : path
+    ChefUtils.windows? ? path.tr("/", "\\") : path
   end
 
   describe "when the target is a symlink" do
     before(:each) do
-      lstat = double("stats", :ino => 5)
+      lstat = double("stats", ino: 5)
       allow(lstat).to receive(:uid).and_return(501)
       allow(lstat).to receive(:gid).and_return(501)
       allow(lstat).to receive(:mode).and_return(0777)
@@ -146,7 +146,7 @@ describe Chef::Resource::Link do
 
   describe "when the target is a regular old file" do
     before do
-      stat = double("stats", :ino => 5)
+      stat = double("stats", ino: 5)
       allow(stat).to receive(:uid).and_return(501)
       allow(stat).to receive(:gid).and_return(501)
       allow(stat).to receive(:mode).and_return(0755)
@@ -178,7 +178,7 @@ describe Chef::Resource::Link do
 
     describe "and the source exists" do
       before do
-        stat = double("stats", :ino => 6)
+        stat = double("stats", ino: 6)
         allow(stat).to receive(:uid).and_return(502)
         allow(stat).to receive(:gid).and_return(502)
         allow(stat).to receive(:mode).and_return(0644)
@@ -205,7 +205,7 @@ describe Chef::Resource::Link do
 
     describe "and is hardlinked to the source" do
       before do
-        stat = double("stats", :ino => 5)
+        stat = double("stats", ino: 5)
         allow(stat).to receive(:uid).and_return(502)
         allow(stat).to receive(:gid).and_return(502)
         allow(stat).to receive(:mode).and_return(0644)
@@ -254,12 +254,13 @@ describe Chef::Resource::Link do
 
   describe "action_delete" do
     before(:each) do
-      stat = double("stats", :ino => 5)
+      stat = double("stats", ino: 5)
       allow(stat).to receive(:uid).and_return(501)
       allow(stat).to receive(:gid).and_return(501)
       allow(stat).to receive(:mode).and_return(0755)
       allow(provider.file_class).to receive(:stat).with(
-        "#{CHEF_SPEC_DATA}/fofile-link").and_return(stat)
+        "#{CHEF_SPEC_DATA}/fofile-link"
+      ).and_return(stat)
 
       provider.load_current_resource
     end
@@ -267,7 +268,8 @@ describe Chef::Resource::Link do
     shared_context "delete link to directories on Windows" do
       before do
         allow(::File).to receive(:directory?).with(
-          "#{CHEF_SPEC_DATA}/fofile-link").and_return(true)
+          "#{CHEF_SPEC_DATA}/fofile-link"
+        ).and_return(true)
       end
 
       it "invokes Dir.delete method to delete the link" do
@@ -280,7 +282,8 @@ describe Chef::Resource::Link do
     shared_context "delete link to directories on Linux" do
       before do
         allow(::File).to receive(:directory?).with(
-          "#{CHEF_SPEC_DATA}/fofile-link").and_return(true)
+          "#{CHEF_SPEC_DATA}/fofile-link"
+        ).and_return(true)
       end
 
       it "invokes File.delete method to delete the link" do
@@ -293,7 +296,8 @@ describe Chef::Resource::Link do
     shared_context "delete link to files" do
       before do
         allow(::File).to receive(:directory?).with(
-          "#{CHEF_SPEC_DATA}/fofile-link").and_return(false)
+          "#{CHEF_SPEC_DATA}/fofile-link"
+        ).and_return(false)
       end
 
       it "invokes File.delete method to delete the link" do
@@ -306,9 +310,11 @@ describe Chef::Resource::Link do
     shared_context "soft links prerequisites" do
       before(:each) do
         allow(provider.file_class).to receive(:symlink?).with(
-          "#{CHEF_SPEC_DATA}/fofile-link").and_return(true)
+          "#{CHEF_SPEC_DATA}/fofile-link"
+        ).and_return(true)
         allow(provider.file_class).to receive(:readlink).with(
-          "#{CHEF_SPEC_DATA}/fofile-link").and_return("#{CHEF_SPEC_DATA}/fofile")
+          "#{CHEF_SPEC_DATA}/fofile-link"
+        ).and_return("#{CHEF_SPEC_DATA}/fofile")
       end
     end
 
@@ -321,21 +327,25 @@ describe Chef::Resource::Link do
       end
 
       before(:each) do
-        stat = double("stats", :ino => 5)
+        stat = double("stats", ino: 5)
         allow(stat).to receive(:uid).and_return(502)
         allow(stat).to receive(:gid).and_return(502)
         allow(stat).to receive(:mode).and_return(0644)
 
         allow(provider.file_class).to receive(:symlink?).with(
-          "#{CHEF_SPEC_DATA}/fofile-link").and_return(false)
+          "#{CHEF_SPEC_DATA}/fofile-link"
+        ).and_return(false)
 
         allow(File).to receive(:exists?).with(
-          "#{CHEF_SPEC_DATA}/fofile-link").and_return(true)
+          "#{CHEF_SPEC_DATA}/fofile-link"
+        ).and_return(true)
         allow(File).to receive(:exists?).with(
-          "#{CHEF_SPEC_DATA}/fofile").and_return(true)
+          "#{CHEF_SPEC_DATA}/fofile"
+        ).and_return(true)
 
         allow(provider.file_class).to receive(:stat).with(
-          "#{CHEF_SPEC_DATA}/fofile").and_return(stat)
+          "#{CHEF_SPEC_DATA}/fofile"
+        ).and_return(stat)
       end
     end
 
@@ -346,9 +356,9 @@ describe Chef::Resource::Link do
 
       before(:each) do
         allow(Chef::Resource::Link).to receive(:new).with(
-          provider.new_resource.name).and_return(resource_link)
-        allow(resource_link).to receive(:verify_links_supported!)
-        allow(Chef::Platform).to receive(:windows?).and_return(true)
+          provider.new_resource.name
+        ).and_return(resource_link)
+        allow(ChefUtils).to receive(:windows?).and_return(true)
       end
 
       context "soft links" do
@@ -378,7 +388,7 @@ describe Chef::Resource::Link do
 
     context "on Linux platform" do
       before(:each) do
-        allow(Chef::Platform).to receive(:windows?).and_return(false)
+        allow(ChefUtils).to receive(:windows?).and_return(false)
       end
 
       context "soft links" do

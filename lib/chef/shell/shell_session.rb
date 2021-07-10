@@ -2,7 +2,7 @@
 # Author:: Daniel DeLeo (<dan@kallistec.com>)
 # Author:: Tim Hinderliter (<tim@chef.io>)
 # Copyright:: Copyright 2009-2016, Daniel DeLeo
-# Copyright:: Copyright 2011-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,16 +18,17 @@
 # limitations under the License.
 #
 
-require "chef/recipe"
-require "chef/run_context"
-require "chef/config"
-require "chef/client"
-require "chef/cookbook/cookbook_collection"
-require "chef/cookbook_loader"
-require "chef/run_list/run_list_expansion"
-require "chef/formatters/base"
-require "chef/formatters/doc"
-require "chef/formatters/minimal"
+require_relative "../recipe"
+require_relative "../run_context"
+require_relative "../config"
+require_relative "../client"
+require_relative "../cookbook/cookbook_collection"
+require_relative "../cookbook_loader"
+require_relative "../run_list/run_list_expansion"
+require_relative "../formatters/base"
+require_relative "../formatters/doc"
+require_relative "../formatters/minimal"
+require "chef-utils/dist" unless defined?(ChefUtils::Dist)
 
 module Shell
   class ShellSession
@@ -40,6 +41,7 @@ module Shell
 
     attr_accessor :node, :compile, :recipe, :json_configuration
     attr_reader :node_attributes, :client
+
     def initialize
       @node_built = false
       formatter = Chef::Formatters.new(Chef::Config.formatter, STDOUT, STDERR)
@@ -74,6 +76,7 @@ module Shell
     end
 
     attr_writer :run_context
+
     def run_context
       @run_context ||= rebuild_context
     end
@@ -87,7 +90,7 @@ module Shell
     end
 
     def save_node
-      raise "Not Supported! #{self.class.name} doesn't support #save_node, maybe you need to run chef-shell in client mode?"
+      raise "Not Supported! #{self.class.name} doesn't support #save_node, maybe you need to run #{ChefUtils::Dist::Infra::SHELL} in client mode?"
     end
 
     def rebuild_context
@@ -259,13 +262,13 @@ module Shell
       @run_list_expansion = @node.expand!("server")
       @expanded_run_list_with_versions = @run_list_expansion.recipes.with_version_constraints_strings
       Chef::Log.info("Run List is [#{@node.run_list}]")
-      Chef::Log.info("Run List expands to [#{@expanded_run_list_with_versions.join(', ')}]")
+      Chef::Log.info("Run List expands to [#{@expanded_run_list_with_versions.join(", ")}]")
       @node
     end
 
     def register
-      @rest = Chef::ServerAPI.new(Chef::Config[:chef_server_url], :client_name => Chef::Config[:node_name],
-                                                                  :signing_key_filename => Chef::Config[:client_key])
+      @rest = Chef::ServerAPI.new(Chef::Config[:chef_server_url], client_name: Chef::Config[:node_name],
+                                                                  signing_key_filename: Chef::Config[:client_key])
     end
 
   end

@@ -16,12 +16,12 @@
 # limitations under the License.
 #
 
-#the Win32 Volume APIs do not support mapping network drives. not supported by WMI either.
-#see also: WNetAddConnection2 and WNetAddConnection3
-#see also cmd.exe: net use /?
+# the Win32 Volume APIs do not support mapping network drives. not supported by WMI either.
+# see also: WNetAddConnection2 and WNetAddConnection3
+# see also cmd.exe: net use /?
 
-require "chef/util/windows"
-require "chef/win32/net"
+require_relative "../windows"
+require_relative "../../win32/net"
 
 class Chef::Util::Windows::NetUse < Chef::Util::Windows
   def initialize(localname)
@@ -38,7 +38,7 @@ class Chef::Util::Windows::NetUse < Chef::Util::Windows
   def add(args)
     if args.class == String
       remote = args
-      args = Hash.new
+      args = {}
       args[:remote] = remote
     end
     args[:local] ||= use_name
@@ -66,7 +66,7 @@ class Chef::Util::Windows::NetUse < Chef::Util::Windows
   end
 
   def device
-    get_info()[:remote]
+    get_info[:remote]
   end
 
   def delete

@@ -1,6 +1,6 @@
 
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +16,11 @@
 # limitations under the License.
 #
 
-require "chef/provider/package"
+require_relative "../../package"
 
 #
 # BUGGY AND DEPRECATED:  This ruby code is known to not match the python implementation for version comparisons.
-# The APIs here should probably be converted to talk to the PythonHelper or just abandonded completely.
+# The APIs here should probably be converted to talk to the PythonHelper or just abandoned completely.
 #
 # e.g. this should just use Chef::Provider::Package::Yum::PythonHelper.instance.compare_versions(x,y)
 #
@@ -46,7 +46,7 @@ class Chef
               lead = 0
               tail = evr.size
 
-              if /^([\d]+):/.match(evr) # rubocop:disable Performance/RedundantMatch
+              if /^(\d+):/.match(evr) # rubocop:disable Performance/RedundantMatch
                 epoch = $1.to_i
                 lead = $1.length + 1
               elsif evr[0].ord == ":".ord
@@ -133,9 +133,7 @@ class Chef
                 while (x_pos <= x_pos_max) && (isalnum(x[x_pos]) == false)
                   x_pos += 1 # +1 over pos_max if end of string
                 end
-                while (y_pos <= y_pos_max) && (isalnum(y[y_pos]) == false)
-                  y_pos += 1
-                end
+                y_pos += 1 while (y_pos <= y_pos_max) && (isalnum(y[y_pos]) == false)
 
                 # if we hit the end of either we are done matching segments
                 if (x_pos == x_pos_max + 1) || (y_pos == y_pos_max + 1)
@@ -154,29 +152,21 @@ class Chef
                   x_seg_pos += 1
 
                   # gather up our digits
-                  while (x_seg_pos <= x_pos_max) && isdigit(x[x_seg_pos])
-                    x_seg_pos += 1
-                  end
+                  x_seg_pos += 1 while (x_seg_pos <= x_pos_max) && isdigit(x[x_seg_pos])
                   # copy the segment but not the unmatched character that x_seg_pos will
                   # refer to
                   x_comp = x[x_pos, x_seg_pos - x_pos]
 
-                  while (y_seg_pos <= y_pos_max) && isdigit(y[y_seg_pos])
-                    y_seg_pos += 1
-                  end
+                  y_seg_pos += 1 while (y_seg_pos <= y_pos_max) && isdigit(y[y_seg_pos])
                   y_comp = y[y_pos, y_seg_pos - y_pos]
                 else
                   # we are comparing strings
                   x_seg_is_num = false
 
-                  while (x_seg_pos <= x_pos_max) && isalpha(x[x_seg_pos])
-                    x_seg_pos += 1
-                  end
+                  x_seg_pos += 1 while (x_seg_pos <= x_pos_max) && isalpha(x[x_seg_pos])
                   x_comp = x[x_pos, x_seg_pos - x_pos]
 
-                  while (y_seg_pos <= y_pos_max) && isalpha(y[y_seg_pos])
-                    y_seg_pos += 1
-                  end
+                  y_seg_pos += 1 while (y_seg_pos <= y_pos_max) && isalpha(y[y_seg_pos])
                   y_comp = y[y_pos, y_seg_pos - y_pos]
                 end
 
@@ -219,9 +209,9 @@ class Chef
 
               # the most unprocessed characters left wins
               if (x_pos_max - x_pos) > (y_pos_max - y_pos)
-                return 1
+                1
               else
-                return -1
+                -1
               end
             end
 
@@ -532,9 +522,9 @@ class Chef
           def lookup(package_name)
             pkgs = @rpms[package_name]
             if pkgs
-              return pkgs.sort.reverse
+              pkgs.sort.reverse
             else
-              return nil
+              nil
             end
           end
 

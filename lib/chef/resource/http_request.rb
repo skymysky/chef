@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Tyler Cloke (<tyler@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,23 +17,25 @@
 # limitations under the License.
 #
 
-require "chef/resource"
+require_relative "../resource"
 
 class Chef
   class Resource
     class HttpRequest < Chef::Resource
-      resource_name :http_request
+      unified_mode true
+
       provides :http_request
 
-      description "Use the http_request resource to send an HTTP request (GET, PUT,"\
-                  " POST, DELETE, HEAD, or OPTIONS) with an arbitrary message. This"\
-                  " resource is often useful when custom callbacks are necessary."
+      description "Use the **http_request** resource to send an HTTP request (`GET`, `PUT`, `POST`, `DELETE`, `HEAD`, or `OPTIONS`) with an arbitrary message. This resource is often useful when custom callbacks are necessary."
 
       default_action :get
       allowed_actions :get, :patch, :put, :post, :delete, :head, :options
 
-      property :url, String, identity: true
-      property :headers, Hash, default: lazy { Hash.new }
+      property :url, String, identity: true,
+               description: "The URL to which an HTTP request is sent."
+
+      property :headers, Hash, default: {},
+               description: "A Hash of custom headers."
 
       def initialize(name, run_context = nil)
         super
@@ -45,7 +47,7 @@ class Chef
         set_or_return(
           :message,
           args,
-          :kind_of => Object
+          kind_of: Object
         )
       end
 

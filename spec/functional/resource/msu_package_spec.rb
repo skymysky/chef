@@ -1,6 +1,6 @@
 #
 # Author:: Nimisha Sharad (<nimisha.sharad@msystechnologies.com>)
-# Copyright:: Copyright (c) 2016 Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,12 +23,20 @@ describe Chef::Resource::MsuPackage, :win2012r2_only do
 
   let(:package_name) { "Package_for_KB2959977" }
   let(:package_source) { "https://download.microsoft.com/download/3/B/3/3B320C07-B7B1-41E5-81F4-79EBC02DF7D3/Windows8.1-KB2959977-x64.msu" }
+  let(:package_identity) { "Package_for_KB2959977~31bf3856ad364e35~amd64~~6.3.1.1" }
+  let(:timeout) { 3600 }
+
+  let(:run_context) do
+    node = Chef::Node.new
+    node.default[:platform] = ohai[:platform]
+    node.default[:platform_version] = ohai[:platform_version]
+    node.default[:os] = ohai[:os]
+    events = Chef::EventDispatch::Dispatcher.new
+    Chef::RunContext.new(node, {}, events)
+  end
 
   let(:new_resource) { Chef::Resource::CabPackage.new("windows_test_pkg") }
   let(:cab_provider) do
-    node = Chef::Node.new
-    events = Chef::EventDispatch::Dispatcher.new
-    run_context = Chef::RunContext.new(node, {}, events)
     Chef::Provider::Package::Cab.new(new_resource, run_context)
   end
 
@@ -36,6 +44,7 @@ describe Chef::Resource::MsuPackage, :win2012r2_only do
     new_resource = Chef::Resource::MsuPackage.new("test msu package", run_context)
     new_resource.package_name package_name
     new_resource.source package_source
+    new_resource.timeout timeout
     new_resource
   end
 
@@ -44,7 +53,7 @@ describe Chef::Resource::MsuPackage, :win2012r2_only do
 
     it "installs the package successfully" do
       subject.run_action(:install)
-      found_packages = cab_provider.installed_packages.select { |p| p["package_identity"] =~ /^#{package_name}~/ }
+      found_packages = cab_provider.installed_packages.select { |p| p["package_identity"] == package_identity }
       expect(found_packages.length).to be == 1
     end
   end
@@ -53,7 +62,7 @@ describe Chef::Resource::MsuPackage, :win2012r2_only do
     it "removes an installed package" do
       subject.run_action(:install)
       remove_package
-      found_packages = cab_provider.installed_packages.select { |p| p["package_identity"] =~ /^#{package_name}~/ }
+      found_packages = cab_provider.installed_packages.select { |p| p["package_identity"] == package_identity }
       expect(found_packages.length).to be == 0
     end
   end
@@ -73,6 +82,20 @@ describe Chef::Resource::MsuPackage, :win2012r2_only do
 
     it "raises error while removing" do
       expect { subject.run_action(:remove) }.to raise_error(Chef::Exceptions::Package)
+    end
+  end
+
+  context "when an msu package is not applicable to the image." do
+    def package_name
+      "Package_for_KB4019990"
+    end
+
+    def package_source
+      "http://download.windowsupdate.com/c/msdownload/update/software/updt/2017/05/windows8-rt-kb4019990-x64_a77f4e3e1f2d47205824763e7121bb11979c2716.msu"
+    end
+
+    it "raises error while installing" do
+      expect { subject.run_action(:install) }.to raise_error(Chef::Exceptions::Package, /The specified package is not applicable to this image./)
     end
   end
 

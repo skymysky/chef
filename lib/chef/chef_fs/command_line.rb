@@ -1,6 +1,6 @@
 #
 # Author:: John Keiser (<jkeiser@chef.io>)
-# Copyright:: Copyright 2012-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,9 +16,12 @@
 # limitations under the License.
 #
 
-require "chef/chef_fs/file_system"
-require "chef/chef_fs/file_system/exceptions"
-require "chef/util/diff"
+require_relative "file_system"
+require_relative "file_system/exceptions"
+require_relative "../util/diff"
+require "chef-utils/parallel_map" unless defined?(ChefUtils::ParallelMap)
+
+using ChefUtils::ParallelMap
 
 class Chef
   module ChefFS
@@ -44,6 +47,7 @@ class Chef
 
           when :directory_to_file
             next if diff_filter && diff_filter !~ /T/
+
             if output_mode == :name_only
               yield "#{new_path}\n"
             elsif output_mode == :name_status
@@ -54,6 +58,7 @@ class Chef
 
           when :file_to_directory
             next if diff_filter && diff_filter !~ /T/
+
             if output_mode == :name_only
               yield "#{new_path}\n"
             elsif output_mode == :name_status
@@ -71,6 +76,7 @@ class Chef
               new_path += File.extname(old_path)
             end
             next if diff_filter && diff_filter !~ /D/
+
             if output_mode == :name_only
               yield "#{new_path}\n"
             elsif output_mode == :name_status
@@ -86,6 +92,7 @@ class Chef
 
           when :added
             next if diff_filter && diff_filter !~ /A/
+
             if output_mode == :name_only
               yield "#{new_path}\n"
             elsif output_mode == :name_status
@@ -101,6 +108,7 @@ class Chef
 
           when :modified
             next if diff_filter && diff_filter !~ /M/
+
             if output_mode == :name_only
               yield "#{new_path}\n"
             elsif output_mode == :name_status
@@ -127,7 +135,7 @@ class Chef
             end
           end
         end
-        if !found_match
+        unless found_match
           ui.error "#{pattern}: No such file or directory on remote or local" if ui
           error = true
         end
@@ -135,7 +143,7 @@ class Chef
       end
 
       def self.diff(pattern, old_root, new_root, recurse_depth, get_content)
-        Chef::ChefFS::Parallelizer.parallelize(Chef::ChefFS::FileSystem.list_pairs(pattern, old_root, new_root)) do |old_entry, new_entry|
+        Chef::ChefFS::FileSystem.list_pairs(pattern, old_root, new_root).parallel_map do |old_entry, new_entry|
           diff_entries(old_entry, new_entry, recurse_depth, get_content)
         end.flatten(1)
       end
@@ -148,7 +156,7 @@ class Chef
             if recurse_depth == 0
               [ [ :common_subdirectories, old_entry, new_entry ] ]
             else
-              Chef::ChefFS::Parallelizer.parallelize(Chef::ChefFS::FileSystem.child_pairs(old_entry, new_entry)) do |old_child, new_child|
+              Chef::ChefFS::FileSystem.child_pairs(old_entry, new_entry).parallel_map do |old_child, new_child|
                 Chef::ChefFS::CommandLine.diff_entries(old_child, new_child, recurse_depth ? recurse_depth - 1 : nil, get_content)
               end.flatten(1)
             end
@@ -185,9 +193,9 @@ class Chef
           are_same, old_value, new_value = Chef::ChefFS::FileSystem.compare(old_entry, new_entry)
           if are_same
             if old_value == :none
-              return [ [ :both_nonexistent, old_entry, new_entry ] ]
+              [ [ :both_nonexistent, old_entry, new_entry ] ]
             else
-              return [ [ :same, old_entry, new_entry ] ]
+              [ [ :same, old_entry, new_entry ] ]
             end
           else
             if old_value == :none
@@ -230,11 +238,11 @@ class Chef
             end
 
             if old_value == :none || (old_value.nil? && !old_entry.exists?)
-              return [ [ :added, old_entry, new_entry, old_value, new_value ] ]
+              [ [ :added, old_entry, new_entry, old_value, new_value ] ]
             elsif new_value == :none
-              return [ [ :deleted, old_entry, new_entry, old_value, new_value ] ]
+              [ [ :deleted, old_entry, new_entry, old_value, new_value ] ]
             else
-              return [ [ :modified, old_entry, new_entry, old_value, new_value ] ]
+              [ [ :modified, old_entry, new_entry, old_value, new_value ] ]
             end
           end
         end
@@ -271,19 +279,18 @@ class Chef
           new_tempfile.write(new_value)
           new_tempfile.close
 
-          begin
-            old_tempfile = Tempfile.new("old")
-            old_tempfile.write(old_value)
-            old_tempfile.close
+          old_tempfile = Tempfile.new("old")
+          old_tempfile.write(old_value)
+          old_tempfile.close
 
-            result = Chef::Util::Diff.new.udiff(old_tempfile.path, new_tempfile.path)
-            result = result.gsub(/^--- #{old_tempfile.path}/, "--- #{old_path}")
-            result = result.gsub(/^\+\+\+ #{new_tempfile.path}/, "+++ #{new_path}")
-            result
-          ensure
-            old_tempfile.close!
-          end
+          result = Chef::Util::Diff.new.udiff(old_tempfile.path, new_tempfile.path)
+          result = result.gsub(/^--- #{old_tempfile.path}/, "--- #{old_path}")
+          result = result.gsub(/^\+\+\+ #{new_tempfile.path}/, "+++ #{new_path}")
+          result
+        rescue => e
+          "!!! Unable to diff #{old_path} and #{new_path} due to #{e}"
         ensure
+          old_tempfile.close!
           new_tempfile.close!
         end
       end

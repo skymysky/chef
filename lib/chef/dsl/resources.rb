@@ -1,6 +1,6 @@
 #
 # Author:: John Keiser <jkeiser@chef.io>
-# Copyright:: Copyright 2015-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "chef/dsl/cheffish"
-require "chef/dsl/chef_provisioning"
+require_relative "cheffish"
 
 class Chef
   module DSL
@@ -27,17 +26,16 @@ class Chef
     #
     # @api private
     module Resources
-      # Include the lazy loaders for cheffish and chef-provisioning, so that the
-      # resource DSL is there but the gems aren't activated yet.
+      # Include the lazy loader for cheffish, so that the
+      # resource DSL is there but the gem isn't activated yet.
       include Chef::DSL::Cheffish
-      include Chef::DSL::ChefProvisioning
 
       def self.add_resource_dsl(dsl_name)
         module_eval(<<-EOM, __FILE__, __LINE__ + 1)
             def #{dsl_name}(args = nil, &block)
               declare_resource(#{dsl_name.inspect}, args, created_at: caller[0], &block)
             end
-          EOM
+        EOM
       end
 
       def self.remove_resource_dsl(dsl_name)

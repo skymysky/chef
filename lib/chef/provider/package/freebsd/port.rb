@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require "chef/provider/package/freebsd/base"
+require_relative "base"
 
 class Chef
   class Provider
@@ -26,19 +26,15 @@ class Chef
           include PortsHelper
 
           def install_package(name, version)
-            shell_out_compact_timeout!("make", "-DBATCH", "install", "clean", timeout: 1800, env: nil, cwd: port_dir).status
+            shell_out!("make", "-DBATCH", "install", "clean", timeout: 1800, env: nil, cwd: port_dir).status
           end
 
           def remove_package(name, version)
-            shell_out_compact_timeout!("make", "deinstall", timeout: 300, env: nil, cwd: port_dir).status
+            shell_out!("make", "deinstall", timeout: 300, env: nil, cwd: port_dir).status
           end
 
           def current_installed_version
-            pkg_info = if new_resource.supports_pkgng?
-                         shell_out_compact_timeout!("pkg", "info", new_resource.package_name, env: nil, returns: [0, 70])
-                       else
-                         shell_out_compact_timeout!("pkg_info", "-E", "#{new_resource.package_name}*", env: nil, returns: [0, 1])
-                       end
+            pkg_info = shell_out!("pkg", "info", new_resource.package_name, env: nil, returns: [0, 70])
             pkg_info.stdout[/^#{Regexp.escape(new_resource.package_name)}-(.+)/, 1]
           end
 

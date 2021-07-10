@@ -1,6 +1,6 @@
 #--
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2012-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -33,7 +33,7 @@ class Chef
   # Not yet sure if this is the optimal way to solve the problem. But it's
   # progress towards the end goal.
   #
-  # TODO: figure out if all this works with OS X's negative uids
+  # TODO: figure out if all this works with macOS' negative uids
   # TODO: windows
   class ScanAccessControl
 

@@ -1,6 +1,6 @@
 #
 # Author:: John Keiser <jkeiser@chef.io>
-# Copyright:: Copyright 2015-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,5 +17,9 @@
 
 class Chef
   class DelayedEvaluator < Proc
+    def dup
+      # super returns a "Proc" (which seems buggy) so re-wrap it
+      self.class.new(&super) # rubocop:disable Layout/SpaceAroundKeyword
+    end
   end
 end

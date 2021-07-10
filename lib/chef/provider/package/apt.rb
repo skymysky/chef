@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,17 +16,19 @@
 # limitations under the License.
 #
 
-require "chef/provider/package"
-require "chef/resource/apt_package"
+require_relative "../package"
+require_relative "deb"
+require_relative "../../resource/apt_package"
 
 class Chef
   class Provider
     class Package
       class Apt < Chef::Provider::Package
+        include Chef::Provider::Package::Deb
         use_multipackage_api
 
-        provides :package, platform_family: "debian"
-        provides :apt_package
+        provides :package, platform_family: "debian", target_mode: true
+        provides :apt_package, target_mode: true
 
         def initialize(new_resource, run_context)
           super
@@ -44,7 +46,7 @@ class Chef
 
           requirements.assert(:all_actions) do |a|
             a.assertion { !new_resource.source }
-            a.failure_message(Chef::Exceptions::Package, "apt package provider cannot handle source attribute. Use dpkg provider instead")
+            a.failure_message(Chef::Exceptions::Package, "apt package provider cannot handle source property. Use dpkg provider instead")
           end
         end
 
@@ -81,10 +83,8 @@ class Chef
         def locked_packages
           @locked_packages ||=
             begin
-              locked = shell_out_compact_timeout!("apt-mark", "showhold")
-              locked.stdout.each_line.map do |line|
-                line.strip
-              end
+              locked = shell_out!("apt-mark", "showhold")
+              locked.stdout.each_line.map(&:strip)
             end
         end
 
@@ -92,7 +92,8 @@ class Chef
           package_name = name.zip(version).map do |n, v|
             package_data[n][:virtual] ? n : "#{n}=#{v}"
           end
-          run_noninteractive("apt-get", "-q", "-y", config_file_options, default_release_options, options, "install", package_name)
+          dgrade = "--allow-downgrades" if supports_allow_downgrade? && allow_downgrade
+          run_noninteractive("apt-get", "-q", "-y", dgrade, config_file_options, default_release_options, options, "install", package_name)
         end
 
         def upgrade_package(name, version)
@@ -113,16 +114,6 @@ class Chef
           run_noninteractive("apt-get", "-q", "-y", options, "purge", package_name)
         end
 
-        def preseed_package(preseed_file)
-          logger.info("#{new_resource} pre-seeding package installation instructions")
-          run_noninteractive("debconf-set-selections", preseed_file)
-        end
-
-        def reconfig_package(name, version)
-          logger.info("#{new_resource} reconfiguring")
-          run_noninteractive("dpkg-reconfigure", name)
-        end
-
         def lock_package(name, version)
           run_noninteractive("apt-mark", options, "hold", name)
         end
@@ -133,6 +124,18 @@ class Chef
 
         private
 
+        # @return [String] version of apt-get which is installed
+        def apt_version
+          @apt_version ||= shell_out("apt-get --version").stdout.match(/^apt (\S+)/)[1]
+        end
+
+        # @return [Boolean] if apt-get supports --allow-downgrades
+        def supports_allow_downgrade?
+          return @supports_allow_downgrade unless @supports_allow_downgrade.nil?
+
+          @supports_allow_downgrade = ( version_compare(apt_version, "1.1.0") >= 0 )
+        end
+
         # compare 2 versions to each other to see which is newer.
         # this differs from the standard package method because we
         # need to be able to parse debian version strings which contain
@@ -140,20 +143,13 @@ class Chef
         #
         # @return [Integer] 1 if v1 > v2. 0 if they're equal. -1 if v1 < v2
         def version_compare(v1, v2)
-          if !shell_out_compact_timeout("dpkg", "--compare-versions", v1.to_s, "gt", v2.to_s).error?
+          if !shell_out("dpkg", "--compare-versions", v1.to_s, "gt", v2.to_s).error?
             1
-          elsif !shell_out_compact_timeout("dpkg", "--compare-versions", v1.to_s, "eq", v2.to_s).error?
+          elsif !shell_out("dpkg", "--compare-versions", v1.to_s, "eq", v2.to_s).error?
             0
           else
             -1
           end
-        end
-
-        # Runs command via shell_out with magic environment to disable
-        # interactive prompts. Command is run with default localization rather
-        # than forcing locale to "C", so command output may not be stable.
-        def run_noninteractive(*args)
-          shell_out_compact_timeout!(*args, env: { "DEBIAN_FRONTEND" => "noninteractive" })
         end
 
         def default_release_options
@@ -165,7 +161,7 @@ class Chef
 
         def config_file_options
           # If the user has specified config file options previously, respect those.
-          return if Array(options).any? { |opt| opt =~ /--force-conf/ }
+          return if Array(options).any? { |opt| opt.include?("--force-conf") }
 
           # It doesn't make sense to install packages in a scenario that can
           # result in a prompt. Have users decide up-front whether they want to
@@ -180,6 +176,7 @@ class Chef
         def resolve_package_versions(pkg)
           current_version = nil
           candidate_version = nil
+          all_versions = []
           run_noninteractive("apt-cache", default_release_options, "policy", pkg).stdout.each_line do |line|
             case line
             when /^\s{2}Installed: (.+)$/
@@ -188,15 +185,41 @@ class Chef
             when /^\s{2}Candidate: (.+)$/
               candidate_version = ( $1 != "(none)" ) ? $1 : nil
               logger.trace("#{new_resource} candidate version for #{pkg} is #{$1}")
+            when /\s+(?:\*\*\* )?(\S+) \d+/
+              all_versions << $1
             end
           end
-          [ current_version, candidate_version ]
+          # This is a bit ugly... really this whole provider needs
+          # to be rewritten to use target_version_array and friends, but
+          # for now this gets us moving
+          idx = package_name_array.index(pkg)
+          chosen_version =
+            if idx
+              user_ver = new_version_array[idx]
+              if user_ver
+                if all_versions.include?(user_ver)
+                  user_ver
+                else
+                  logger.debug("User specified a version that's not available")
+                  nil
+                end
+              else
+                # user didn't specify a version, use candidate
+                candidate_version
+              end
+            else
+              # this probably means we're redirected from a virtual
+              # package, so... just go with candidate version
+              candidate_version
+            end
+          [ current_version, chosen_version ]
         end
 
         def resolve_virtual_package_name(pkg)
           showpkg = run_noninteractive("apt-cache", "showpkg", pkg).stdout
           partitions = showpkg.rpartition(/Reverse Provides: ?#{$/}/)
           return nil if partitions[0] == "" && partitions[1] == "" # not found in output
+
           set = partitions[2].lines.each_with_object(Set.new) do |line, acc|
             # there may be multiple reverse provides for a single package
             acc.add(line.split[0])
@@ -204,6 +227,7 @@ class Chef
           if set.size > 1
             raise Chef::Exceptions::Package, "#{new_resource.package_name} is a virtual package provided by multiple packages, you must explicitly select one"
           end
+
           set.to_a.first
         end
 
@@ -225,9 +249,9 @@ class Chef
           end
 
           {
-            current_version:    current_version,
-            candidate_version:  candidate_version,
-            virtual:            virtual,
+            current_version: current_version,
+            candidate_version: candidate_version,
+            virtual: virtual,
           }
         end
 

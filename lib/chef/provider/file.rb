@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Lamont Granquist (<lamont@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,20 +17,21 @@
 # limitations under the License.
 #
 
-require "chef/config"
-require "chef/log"
-require "chef/resource/file"
-require "chef/provider"
-require "etc"
-require "fileutils"
-require "chef/scan_access_control"
-require "chef/mixin/checksum"
-require "chef/mixin/file_class"
-require "chef/mixin/enforce_ownership_and_permissions"
-require "chef/util/backup"
-require "chef/util/diff"
-require "chef/util/selinux"
-require "chef/file_content_management/deploy"
+require_relative "../config"
+require_relative "../log"
+require_relative "../resource/file"
+require_relative "../provider"
+require "etc" unless defined?(Etc)
+require "fileutils" unless defined?(FileUtils)
+require_relative "../scan_access_control"
+require_relative "../mixin/checksum"
+require_relative "../mixin/file_class"
+require_relative "../mixin/enforce_ownership_and_permissions"
+require_relative "../util/backup"
+require_relative "../util/diff"
+require_relative "../util/selinux"
+require_relative "../file_content_management/deploy"
+require "chef-utils" unless defined?(ChefUtils::CANARY)
 
 # The Tao of File Providers:
 #  - the content provider must always return a tempfile that we can delete/mv
@@ -83,13 +84,13 @@ class Chef
           end
 
         # true if we are going to be creating a new file
-        @needs_creating  = !::File.exist?(new_resource.path) || needs_unlinking?
+        @needs_creating = !::File.exist?(new_resource.path) || needs_unlinking?
 
         # Let children resources override constructing the current_resource
         @current_resource ||= Chef::Resource::File.new(new_resource.name)
         current_resource.path(new_resource.path)
 
-        if !needs_creating?
+        unless needs_creating?
           # we are updating an existing file
           if managing_content?
             logger.trace("#{new_resource} checksumming file at #{new_resource.path}.")
@@ -136,7 +137,7 @@ class Chef
         end
       end
 
-      def action_create
+      action :create do
         do_generate_content
         do_validate_content
         do_unlink
@@ -147,16 +148,16 @@ class Chef
         load_resource_attributes_from_file(new_resource) unless Chef::Config[:why_run]
       end
 
-      def action_create_if_missing
+      action :create_if_missing do
         unless ::File.exist?(new_resource.path)
           action_create
         else
-          logger.trace("#{new_resource} exists at #{new_resource.path} taking no action.")
+          logger.debug("#{new_resource} exists at #{new_resource.path} taking no action.")
         end
       end
 
-      def action_delete
-        if ::File.exists?(new_resource.path)
+      action :delete do
+        if ::File.exist?(new_resource.path)
           converge_by("delete file #{new_resource.path}") do
             do_backup unless file_class.symlink?(new_resource.path)
             ::File.delete(new_resource.path)
@@ -165,7 +166,7 @@ class Chef
         end
       end
 
-      def action_touch
+      action :touch do
         action_create
         converge_by("update utime on file #{new_resource.path}") do
           time = Time.now
@@ -189,6 +190,7 @@ class Chef
       def managing_content?
         return true if new_resource.checksum
         return true if !new_resource.content.nil? && @action != :create_if_missing
+
         false
       end
 
@@ -227,9 +229,9 @@ class Chef
         elsif file_class.symlink?(path) && new_resource.manage_symlink_source
           verify_symlink_sanity(path)
         elsif file_class.symlink?(new_resource.path) && new_resource.manage_symlink_source.nil?
-          logger.warn("File #{path} managed by #{new_resource} is really a symlink. Managing the source file instead.")
+          logger.warn("File #{path} managed by #{new_resource} is really a symlink (to #{file_class.realpath(new_resource.path)}). Managing the source file instead.")
           logger.warn("Disable this warning by setting `manage_symlink_source true` on the resource")
-          logger.warn("In a future Chef release, 'manage_symlink_source' will not be enabled by default")
+          logger.warn("In a future release, 'manage_symlink_source' will not be enabled by default")
           verify_symlink_sanity(path)
         elsif new_resource.force_unlink
           [nil, nil, nil]
@@ -332,14 +334,17 @@ class Chef
       end
 
       def do_validate_content
-        if new_resource.checksum && tempfile && ( new_resource.checksum.downcase != tempfile_checksum )
+        if new_resource.checksum && tempfile && ( new_resource.checksum != tempfile_checksum )
           raise Chef::Exceptions::ChecksumMismatch.new(short_cksum(new_resource.checksum), short_cksum(tempfile_checksum))
         end
 
-        if tempfile
+        if tempfile && contents_changed?
           new_resource.verify.each do |v|
-            if ! v.verify(tempfile.path)
-              raise Chef::Exceptions::ValidationFailed.new "Proposed content for #{new_resource.path} failed verification #{new_resource.sensitive ? '[sensitive]' : v}"
+            unless v.verify(tempfile.path)
+              backupfile = "#{Chef::Config[:file_cache_path]}/failed_validations/#{::File.basename(tempfile.path)}"
+              FileUtils.mkdir_p ::File.dirname(backupfile)
+              FileUtils.cp tempfile.path, backupfile
+              raise Chef::Exceptions::ValidationFailed.new "Proposed content for #{new_resource.path} failed verification #{new_resource.sensitive ? "[sensitive]" : "#{v}\n#{v.output}"}\nTemporary file moved to #{backupfile}"
             end
           end
         end
@@ -376,7 +381,7 @@ class Chef
 
       def update_file_contents
         do_backup unless needs_creating?
-        deployment_strategy.deploy(tempfile.path, ::File.realpath(new_resource.path))
+        deployment_strategy.deploy(tempfile.path, ::File.realpath(new_resource.path).force_encoding(Chef::Config[:ruby_encoding]))
         logger.info("#{new_resource} updated file contents #{new_resource.path}")
         if managing_content?
           # save final checksum for reporting.
@@ -388,8 +393,8 @@ class Chef
         # a nil tempfile is okay, means the resource has no content or no new content
         return if tempfile.nil?
         # but a tempfile that has no path or doesn't exist should not happen
-        if tempfile.path.nil? || !::File.exists?(tempfile.path)
-          raise "chef-client is confused, trying to deploy a file that has no path or does not exist..."
+        if tempfile.path.nil? || !::File.exist?(tempfile.path)
+          raise "#{ChefUtils::Dist::Infra::CLIENT} is confused, trying to deploy a file that has no path or does not exist..."
         end
 
         # the file? on the next line suppresses the case in why-run when we have a not-file here that would have otherwise been removed
@@ -451,13 +456,14 @@ class Chef
       end
 
       def load_resource_attributes_from_file(resource)
-        if Chef::Platform.windows?
+        if ChefUtils.windows?
           # This is a work around for CHEF-3554.
           # OC-6534: is tracking the real fix for this workaround.
           # Add support for Windows equivalent, or implicit resource
           # reporting won't work for Windows.
           return
         end
+
         acl_scanner = ScanAccessControl.new(new_resource, resource)
         acl_scanner.set_all!
       end

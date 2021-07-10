@@ -1,6 +1,6 @@
 #
 # Author:: John Keiser (<jkeiser@chef.io>)
-# Copyright:: Copyright 2012-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +20,7 @@ require "spec_helper"
 require "chef/chef_fs/file_system"
 require "chef/chef_fs/file_pattern"
 
-describe Chef::ChefFS::FileSystem do
+describe Chef::ChefFS::FileSystem, ruby: ">= 3.0" do
   include FileSystemSupport
 
   context "with empty filesystem" do
@@ -57,17 +57,17 @@ describe Chef::ChefFS::FileSystem do
   context "with a populated filesystem" do
     let(:fs) do
       memory_fs("", {
-        :a => {
-          :aa => {
-            :c => "",
-            :zz => "",
+        a: {
+          aa: {
+            c: "",
+            zz: "",
           },
-          :ab => {
-            :c => "",
+          ab: {
+            c: "",
           },
         },
-        :x => "",
-        :y => {},
+        x: "",
+        y: {},
       })
     end
     context "list" do

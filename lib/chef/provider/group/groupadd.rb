@@ -1,6 +1,6 @@
 #
 # Author:: AJ Christensen (<aj@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -44,19 +44,19 @@ class Chef
 
         # Create the group
         def create_group
-          shell_out_compact!("groupadd", set_options, groupadd_options)
+          shell_out!("groupadd", set_options, groupadd_options)
           modify_group_members
         end
 
         # Manage the group when it already exists
         def manage_group
-          shell_out_compact!("groupmod", set_options)
+          shell_out!("groupmod", set_options)
           modify_group_members
         end
 
         # Remove the group
         def remove_group
-          shell_out_compact!("groupdel", new_resource.group_name)
+          shell_out!("groupdel", new_resource.group_name)
         end
 
         def modify_group_members
@@ -67,7 +67,7 @@ class Chef
                 members_to_be_added << member unless current_resource.members.include?(member)
               end
               members_to_be_added.each do |member|
-                logger.trace("#{new_resource} appending member #{member} to group #{new_resource.group_name}")
+                logger.debug("#{new_resource} appending member #{member} to group #{new_resource.group_name}")
                 add_member(member)
               end
             end
@@ -79,13 +79,13 @@ class Chef
               end
 
               members_to_be_removed.each do |member|
-                logger.trace("#{new_resource} removing member #{member} from group #{new_resource.group_name}")
+                logger.debug("#{new_resource} removing member #{member} from group #{new_resource.group_name}")
                 remove_member(member)
               end
             end
           else
             members_description = new_resource.members.empty? ? "none" : new_resource.members.join(", ")
-            logger.trace("#{new_resource} setting group members to: #{members_description}")
+            logger.debug("#{new_resource} setting group members to: #{members_description}")
             set_members(new_resource.members)
           end
         end
@@ -111,6 +111,7 @@ class Chef
           { gid: "-g" }.sort_by { |a| a[0] }.each do |field, option|
             next unless current_resource.send(field) != new_resource.send(field)
             next unless new_resource.send(field)
+
             opts << option
             opts << new_resource.send(field)
             logger.trace("#{new_resource} set #{field} to #{new_resource.send(field)}")

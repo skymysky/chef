@@ -1,5 +1,5 @@
 # Author:: Dheeraj Dubey(dheeraj.dubey@msystechnologies.com)
-# Copyright:: Copyright 2008-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,28 +15,36 @@
 # limitations under the License.
 #
 
-require "chef/resource/package"
-require "chef/mixin/uris"
+require_relative "package"
 
 class Chef
   class Resource
     class PowershellPackage < Chef::Resource::Package
-      include Chef::Mixin::Uris
+      unified_mode true
 
-      resource_name :powershell_package
       provides :powershell_package
 
-      description "Use the powershell_package resource to install and manage packages via"\
-                  " the Powershell Package Manager for the Microsoft Windows platform. The"\
-                  " powershell_package resource requires administrative access, and a source"\
-                  " must be configured in the Powershell Package Manager via the Register-PackageSource command"
+      description "Use the **powershell_package** resource to install and manage packages via the PowerShell Package Manager for the Microsoft Windows platform. The powershell_package resource requires administrative access, and a source must be configured in the PowerShell Package Manager via the powershell_package_source resource."
       introduced "12.16"
 
       allowed_actions :install, :remove
 
-      property :package_name, [String, Array], coerce: proc { |x| [x].flatten }
-      property :version, [String, Array], coerce: proc { |x| [x].flatten }
-      property :source, [String]
+      property :package_name, [String, Array],
+        description: "The name of the package. Default value: the name of the resource block.",
+        coerce: proc { |x| [x].flatten }
+
+      property :version, [String, Array],
+        description: "The version of a package to be installed or upgraded.",
+        coerce: proc { |x| [x].flatten }
+
+      property :source, String,
+        description: "Specify the source of the package.",
+        introduced: "14.0"
+
+      property :skip_publisher_check, [true, false],
+        description: "Skip validating module author.",
+        default: false, introduced: "14.3", desired_state: false
+
     end
   end
 end

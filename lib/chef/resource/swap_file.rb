@@ -1,6 +1,6 @@
 #
-# Copyright 2012-2018, Seth Vargo
-# Copyright 2017-2018, Chef Software, Inc.
+# Copyright:: 2012-2018, Seth Vargo
+# Copyright:: Copyright (c) Chef Software Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,43 +15,60 @@
 # limitations under the License.
 #
 
-require "chef/resource"
+require_relative "../resource"
 
 class Chef
   class Resource
     class SwapFile < Chef::Resource
-      resource_name :swap_file
+      unified_mode true
+
       provides(:swap_file) { true }
 
-      description "Use the swap_file resource to create or delete swap files on Linux systems, and optionally to manage the swappiness configuration for a host."
+      description "Use the **swap_file** resource to create or delete swap files on Linux systems, and optionally to manage the swappiness configuration for a host."
       introduced "14.0"
+      examples <<~DOC
+      **Create a swap file**
+
+      ```ruby
+      swap_file '/dev/sda1' do
+        size 1024
+      end
+      ```
+
+      **Remove a swap file**
+
+      ```ruby
+      swap_file '/dev/sda1' do
+        action :remove
+      end
+      ```
+      DOC
 
       property :path, String,
-               description: "The path to put the swap file on the system.",
-               name_property: true
+        description: "The path where the swap file will be created on the system if it differs from the resource block's name.",
+        name_property: true
 
       property :size, Integer,
-               description: "The size (in MBs) for the swap file."
+        description: "The size (in MBs) of the swap file."
 
       property :persist, [TrueClass, FalseClass],
-               description: "Persist the swapon.",
-               default: false
+        description: "Persist the swapon.",
+        default: false
 
       property :timeout, Integer,
-               description: "Timeout for dd/fallocate.",
-               default: 600
+        description: "Timeout for `dd` / `fallocate` commands.",
+        default: 600,
+        desired_state: false
 
       property :swappiness, Integer,
-               description: "The swappiness value to set on the system."
+        description: "The swappiness value to set on the system."
 
-      action :create do
-        description "Create a swapfile."
-
+      action :create, description: "Create a swapfile." do
         if swap_enabled?
           Chef::Log.debug("#{new_resource} already created - nothing to do")
         else
           begin
-            Chef::Log.info "starting first create: #{node['virtualization']['system']}"
+            Chef::Log.info "starting first create: #{node["virtualization"]["system"]}"
             do_create(swap_creation_command)
           rescue Mixlib::ShellOut::ShellCommandFailed => e
             Chef::Log.warn("#{new_resource} Rescuing failed swapfile creation for #{new_resource.path}")
@@ -60,15 +77,13 @@ class Chef
           end
         end
         if new_resource.swappiness
-          declare_resource(:sysctl, "vm.swappiness") do
+          sysctl "vm.swappiness" do
             value new_resource.swappiness
           end
         end
       end
 
-      action :remove do
-        description "Remove a swapfile and disable swap."
-
+      action :remove, description: "Remove a swapfile and disable swap." do
         swapoff if swap_enabled?
         remove_swapfile if ::File.exist?(new_resource.path)
       end

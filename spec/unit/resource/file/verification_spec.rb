@@ -1,6 +1,6 @@
 #
 # Author:: Steven Danna (<steve@chef.io>)
-# Copyright:: Copyright 2014-2016, Chef Software, Inc
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -48,7 +48,7 @@ describe Chef::Resource::File::Verification do
 
     it "accepts an options hash" do
       v = Chef::Resource::File::Verification.new(parent_resource, nil, {}) {}
-      expect { v.verify("/foo/bar", { :future => true }) }.to_not raise_error
+      expect { v.verify("/foo/bar", { future: true }) }.to_not raise_error
     end
 
     context "with a verification block" do
@@ -112,7 +112,8 @@ describe Chef::Resource::File::Verification do
       end
 
       it "returns true if the command succeeds" do
-        v = Chef::Resource::File::Verification.new(parent_resource, "true", {})
+        test_command = platform_specific_verify_command("path")
+        v = Chef::Resource::File::Verification.new(parent_resource, test_command, {})
         expect(v.verify(temp_path)).to eq(true)
       end
 
@@ -128,8 +129,7 @@ describe Chef::Resource::File::Verification do
       before(:each) do
         class Chef::Resource::File::Verification::Turtle < Chef::Resource::File::Verification
           provides :cats
-          def verify(path, opts)
-          end
+          def verify(path, opts); end
         end
         allow(Chef::Resource::File::Verification::Turtle).to receive(:new).and_return(registered_verification)
       end

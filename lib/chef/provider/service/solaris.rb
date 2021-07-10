@@ -1,6 +1,6 @@
 #
 # Author:: Toomas Pelberg (<toomasp@gmx.net>)
-# Copyright:: Copyright 2010-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/provider/service"
-require "chef/resource/service"
+require_relative "../service"
+require_relative "../../resource/service"
 
 class Chef
   class Provider
@@ -80,7 +80,7 @@ class Chef
         end
 
         def service_status
-          cmd = shell_out!(@status_command, "-l", @current_resource.service_name, :returns => [0, 1])
+          cmd = shell_out!(@status_command, "-l", @current_resource.service_name, returns: [0, 1])
           # Example output
           # $ svcs -l rsyslog
           # fmri         svc:/application/rsyslog:default

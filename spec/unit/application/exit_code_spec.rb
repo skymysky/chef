@@ -1,6 +1,6 @@
 #
 # Author:: Steven Murawski (<smurawski@chef.io>)
-# Copyright:: Copyright 2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -49,10 +49,6 @@ describe Chef::Application::ExitCode do
       expect(valid_rfc_exit_codes.include?(3)).to eq(true)
     end
 
-    it "validates a AUDIT_MODE_FAILURE return code of 42" do
-      expect(valid_rfc_exit_codes.include?(42)).to eq(true)
-    end
-
     it "validates a REBOOT_SCHEDULED return code of 35" do
       expect(valid_rfc_exit_codes.include?(35)).to eq(true)
     end
@@ -65,6 +61,10 @@ describe Chef::Application::ExitCode do
       expect(valid_rfc_exit_codes.include?(41)).to eq(true)
     end
 
+    it "validates a CONFIG_FAILURE return code of 43" do
+      expect(valid_rfc_exit_codes.include?(43)).to eq(true)
+    end
+
     it "validates a CLIENT_UPGRADED return code of 213" do
       expect(valid_rfc_exit_codes.include?(213)).to eq(true)
     end
@@ -74,7 +74,8 @@ describe Chef::Application::ExitCode do
 
     it "does write a warning on non-standard exit codes" do
       expect(Chef::Log).to receive(:warn).with(
-        /^Chef attempted to exit with a non-standard exit code of 151/)
+        /attempted to exit with a non-standard exit code of 151/
+      )
       expect(exit_codes.normalize_exit_code(151)).to eq(1)
     end
 
@@ -83,7 +84,7 @@ describe Chef::Application::ExitCode do
     end
 
     it "returns GENERIC_FAILURE when no exit code is specified" do
-      expect(exit_codes.normalize_exit_code()).to eq(1)
+      expect(exit_codes.normalize_exit_code).to eq(1)
     end
 
     it "returns SIGINT_RECEIVED when a SIGINT is received" do
@@ -96,12 +97,6 @@ describe Chef::Application::ExitCode do
 
     it "returns GENERIC_FAILURE when an exception is specified" do
       expect(exit_codes.normalize_exit_code(Exception.new("BOOM"))).to eq(1)
-    end
-
-    it "returns AUDIT_MODE_FAILURE when there is an audit error" do
-      audit_error = Chef::Exceptions::AuditError.new("BOOM")
-      runtime_error = Chef::Exceptions::RunFailedWrappingError.new(audit_error)
-      expect(exit_codes.normalize_exit_code(runtime_error)).to eq(42)
     end
 
     it "returns REBOOT_SCHEDULED when there is an reboot requested" do
@@ -120,6 +115,12 @@ describe Chef::Application::ExitCode do
       reboot_error = Chef::Exceptions::RebootPending.new("BOOM")
       runtime_error = Chef::Exceptions::RunFailedWrappingError.new(reboot_error)
       expect(exit_codes.normalize_exit_code(runtime_error)).to eq(37)
+    end
+
+    it "returns CONFIG_FAILURE when a configuration exception is specified" do
+      config_error = Chef::Exceptions::ConfigurationError.new("BOOM")
+      runtime_error = Chef::Exceptions::RunFailedWrappingError.new(config_error)
+      expect(exit_codes.normalize_exit_code(runtime_error)).to eq(43)
     end
 
     it "returns CLIENT_UPGRADED when the client was upgraded during converge" do

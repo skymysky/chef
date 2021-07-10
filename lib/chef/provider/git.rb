@@ -1,6 +1,6 @@
 #
 # Author:: Daniel DeLeo (<dan@kallistec.com>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,10 +16,10 @@
 # limitations under the License.
 #
 
-require "chef/exceptions"
-require "chef/log"
-require "chef/provider"
-require "fileutils"
+require_relative "../exceptions"
+require_relative "../log"
+require_relative "../provider"
+require "fileutils" unless defined?(FileUtils)
 
 class Chef
   class Provider
@@ -41,22 +41,36 @@ class Chef
       end
 
       def define_resource_requirements
+        unless new_resource.user.nil?
+          requirements.assert(:all_actions) do |a|
+            a.assertion do
+
+              get_homedir(new_resource.user)
+            rescue ArgumentError
+              false
+
+            end
+            a.whyrun("User #{new_resource.user} does not exist, this run will fail unless it has been previously created. Assuming it would have been created.")
+            a.failure_message(Chef::Exceptions::User, "#{new_resource.user} required by resource #{new_resource.name} does not exist")
+          end
+        end
+
         # Parent directory of the target must exist.
         requirements.assert(:checkout, :sync) do |a|
           dirname = ::File.dirname(cwd)
           a.assertion { ::File.directory?(dirname) }
           a.whyrun("Directory #{dirname} does not exist, this run will fail unless it has been previously created. Assuming it would have been created.")
           a.failure_message(Chef::Exceptions::MissingParentDirectory,
-            "Cannot clone #{new_resource} to #{cwd}, the enclosing directory #{dirname} does not exist")
+                            "Cannot clone #{new_resource} to #{cwd}, the enclosing directory #{dirname} does not exist")
         end
 
         requirements.assert(:all_actions) do |a|
-          a.assertion { !(new_resource.revision =~ /^origin\//) }
+          a.assertion { !(new_resource.revision =~ %r{^origin/}) }
           a.failure_message Chef::Exceptions::InvalidRemoteGitReference,
-             "Deploying remote branches is not supported. " +
-            "Specify the remote branch as a local branch for " +
-            "the git repository you're deploying from " +
-            "(ie: '#{new_resource.revision.gsub('origin/', '')}' rather than '#{new_resource.revision}')."
+            "Deploying remote branches is not supported. " +
+              "Specify the remote branch as a local branch for " +
+              "the git repository you're deploying from " +
+              "(ie: '#{new_resource.revision.gsub("origin/", "")}' rather than '#{new_resource.revision}')."
         end
 
         requirements.assert(:all_actions) do |a|
@@ -66,12 +80,12 @@ class Chef
           a.assertion { !target_revision.nil? }
           a.failure_message Chef::Exceptions::UnresolvableGitReference,
             "Unable to parse SHA reference for '#{new_resource.revision}' in repository '#{new_resource.repository}'. " +
-            "Verify your (case-sensitive) repository URL and revision.\n" +
-            "`git ls-remote '#{new_resource.repository}' '#{rev_search_pattern}'` output: #{@resolved_reference}"
+              "Verify your (case-sensitive) repository URL and revision.\n" +
+              "`git ls-remote '#{new_resource.repository}' '#{rev_search_pattern}'` output: #{@resolved_reference}"
         end
       end
 
-      def action_checkout
+      action :checkout do
         if target_dir_non_existent_or_empty?
           clone
           if new_resource.enable_checkout
@@ -80,18 +94,18 @@ class Chef
           enable_submodules
           add_remotes
         else
-          logger.trace "#{new_resource} checkout destination #{cwd} already exists or is a non-empty directory"
+          logger.debug "#{new_resource} checkout destination #{cwd} already exists or is a non-empty directory"
         end
       end
 
-      def action_export
+      action :export do
         action_checkout
         converge_by("complete the export by removing #{cwd}.git after checkout") do
           FileUtils.rm_rf(::File.join(cwd, ".git"))
         end
       end
 
-      def action_sync
+      action :sync do
         if existing_git_clone?
           logger.trace "#{new_resource} current revision: #{current_resource.revision} target revision: #{target_revision}"
           unless current_revision_matches_target_revision?
@@ -111,6 +125,7 @@ class Chef
 
       def git_gem_version
         return @git_gem_version if defined?(@git_gem_version)
+
         output = git("--version").stdout
         match = GIT_VERSION_PATTERN.match(output)
         if match
@@ -139,6 +154,11 @@ class Chef
         sha_hash?(result) ? result : nil
       end
 
+      def already_on_target_branch?
+        current_branch = git("rev-parse", "--abbrev-ref", "HEAD", cwd: cwd, returns: [0, 128]).stdout.strip
+        current_branch == (new_resource.checkout_branch || new_resource.revision)
+      end
+
       def add_remotes
         if new_resource.additional_remotes.length > 0
           new_resource.additional_remotes.each_pair do |remote_name, remote_url|
@@ -151,7 +171,7 @@ class Chef
       end
 
       def clone
-        converge_by("clone from #{new_resource.repository} into #{cwd}") do
+        converge_by("clone from #{repo_url} into #{cwd}") do
           remote = new_resource.remote
 
           clone_cmd = ["clone"]
@@ -161,19 +181,33 @@ class Chef
           clone_cmd << "\"#{new_resource.repository}\""
           clone_cmd << "\"#{cwd}\""
 
-          logger.info "#{new_resource} cloning repo #{new_resource.repository} to #{cwd}"
+          logger.info "#{new_resource} cloning repo #{repo_url} to #{cwd}"
           git clone_cmd
         end
       end
 
       def checkout
-        sha_ref = target_revision
-
-        converge_by("checkout ref #{sha_ref} branch #{new_resource.revision}") do
+        converge_by("checkout ref #{target_revision} branch #{new_resource.revision}") do
           # checkout into a local branch rather than a detached HEAD
-          git("branch", "-f", new_resource.checkout_branch, sha_ref, cwd: cwd)
-          git("checkout", new_resource.checkout_branch, cwd: cwd)
-          logger.info "#{new_resource} checked out branch: #{new_resource.revision} onto: #{new_resource.checkout_branch} reference: #{sha_ref}"
+          if new_resource.checkout_branch
+            # check out to a local branch
+            git("branch", "-f", new_resource.checkout_branch, target_revision, cwd: cwd)
+            git("checkout", new_resource.checkout_branch, cwd: cwd)
+            logger.info "#{new_resource} checked out branch: #{new_resource.revision} onto: #{new_resource.checkout_branch} reference: #{target_revision}"
+          elsif sha_hash?(new_resource.revision) || !is_branch?
+            # detached head
+            git("checkout", target_revision, cwd: cwd)
+            logger.info "#{new_resource} checked out reference: #{target_revision}"
+          elsif already_on_target_branch?
+            # we are already on the proper branch
+            git("reset", "--hard", target_revision, cwd: cwd)
+          else
+            # need a branch with a tracking branch
+            git("branch", "-f", new_resource.revision, target_revision, cwd: cwd)
+            git("checkout", new_resource.revision, cwd: cwd)
+            git("branch", "-u", "#{new_resource.remote}/#{new_resource.revision}", cwd: cwd)
+            logger.info "#{new_resource} checked out branch: #{new_resource.revision} reference: #{target_revision}"
+          end
         end
       end
 
@@ -196,7 +230,19 @@ class Chef
           logger.trace "Fetching updates from #{new_resource.remote} and resetting to revision #{target_revision}"
           git("fetch", "--prune", new_resource.remote, cwd: cwd)
           git("fetch", new_resource.remote, "--tags", cwd: cwd)
-          git("reset", "--hard", target_revision, cwd: cwd)
+          if sha_hash?(new_resource.revision) || is_tag? || already_on_target_branch?
+            # detached head or if we are already on the proper branch
+            git("reset", "--hard", target_revision, cwd: cwd)
+          elsif new_resource.checkout_branch
+            # check out to a local branch
+            git("branch", "-f", new_resource.checkout_branch, target_revision, cwd: cwd)
+            git("checkout", new_resource.checkout_branch, cwd: cwd)
+          else
+            # need a branch with a tracking branch
+            git("branch", "-f", new_resource.revision, target_revision, cwd: cwd)
+            git("checkout", new_resource.revision, cwd: cwd)
+            git("branch", "-u", "#{new_resource.remote}/#{new_resource.revision}", cwd: cwd)
+          end
         end
       end
 
@@ -213,7 +259,7 @@ class Chef
             #   which we can fix by replacing them all with our target url (hence the --replace-all option)
 
             if multiple_remotes?(remote_status) || !remote_matches?(remote_url, remote_status)
-              git("config", "--replace-all", "remote.#{remote_name}.url", remote_url, cwd: cwd)
+              git("config", "--replace-all", "remote.#{remote_name}.url", %{"#{remote_url}"}, cwd: cwd)
             end
           when 1
             git("remote", "add", remote_name, remote_url, cwd: cwd)
@@ -234,13 +280,12 @@ class Chef
       end
 
       def target_revision
-        @target_revision ||= begin
+        @target_revision ||=
           if sha_hash?(new_resource.revision)
             @target_revision = new_resource.revision
           else
             @target_revision = remote_resolve_reference
           end
-        end
       end
 
       alias :revision_slug :target_revision
@@ -271,9 +316,18 @@ class Chef
 
       def find_revision(refs, revision, suffix = "")
         found = refs_search(refs, rev_match_pattern("refs/tags/", revision) + suffix)
-        found = refs_search(refs, rev_match_pattern("refs/heads/", revision) + suffix) if found.empty?
-        found = refs_search(refs, revision + suffix) if found.empty?
-        found
+        if !found.empty?
+          @is_tag = true
+          found
+        else
+          found = refs_search(refs, rev_match_pattern("refs/heads/", revision) + suffix)
+          if !found.empty?
+            @is_branch = true
+            found
+          else
+            refs_search(refs, revision + suffix)
+          end
+        end
       end
 
       def rev_match_pattern(prefix, revision)
@@ -304,6 +358,14 @@ class Chef
 
       private
 
+      def is_branch?
+        !!@is_branch
+      end
+
+      def is_tag?
+        !!@is_tag
+      end
+
       def run_options(run_opts = {})
         env = {}
         if new_resource.user
@@ -311,17 +373,7 @@ class Chef
           # Certain versions of `git` misbehave if git configuration is
           # inaccessible in $HOME. We need to ensure $HOME matches the
           # user who is executing `git` not the user running Chef.
-          env["HOME"] = begin
-            require "etc"
-            case new_resource.user
-            when Integer
-              Etc.getpwuid(new_resource.user).dir
-            else
-              Etc.getpwnam(new_resource.user.to_s).dir
-            end
-          rescue ArgumentError # user not found
-            raise Chef::Exceptions::User, "Could not determine HOME for specified user '#{new_resource.user}' for resource '#{new_resource.name}'"
-          end
+          env["HOME"] = get_homedir(new_resource.user)
         end
         run_opts[:group] = new_resource.group if new_resource.group
         env["GIT_SSH"] = new_resource.ssh_wrapper if new_resource.ssh_wrapper
@@ -335,13 +387,37 @@ class Chef
       def git(*args, **run_opts)
         git_command = ["git", args].compact.join(" ")
         logger.trace "running #{git_command}"
-        shell_out!(git_command, run_options(run_opts))
+        shell_out!(git_command, **run_options(run_opts))
       end
 
       def sha_hash?(string)
         string =~ /^[0-9a-f]{40}$/
       end
 
+      # Returns a message for sensitive repository URL if sensitive is true otherwise
+      # repository URL is returned
+      # @return [String]
+      def repo_url
+        if new_resource.sensitive
+          "**Suppressed Sensitive URL**"
+        else
+          new_resource.repository
+        end
+      end
+
+      # Returns the home directory of the user
+      # @param [String] user must be a string.
+      # @return [String] the home directory of the user.
+      #
+      def get_homedir(user)
+        require "etc" unless defined?(Etc)
+        case user
+        when Integer
+          Etc.getpwuid(user).dir
+        else
+          Etc.getpwnam(user.to_s).dir
+        end
+      end
     end
   end
 end

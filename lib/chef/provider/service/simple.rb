@@ -16,8 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/provider/service"
-require "chef/resource/service"
+require_relative "../service"
+require_relative "../../resource/service"
 
 class Chef
   class Provider
@@ -73,7 +73,8 @@ class Chef
           requirements.assert(:all_actions) do |a|
             a.assertion do
               @new_resource.status_command || supports[:status] ||
-                (!ps_cmd.nil? && !ps_cmd.empty?) end
+                (!ps_cmd.nil? && !ps_cmd.empty?)
+            end
             a.failure_message Chef::Exceptions::Service, "#{@new_resource} could not determine how to inspect the process table, please set this node's 'command.ps' attribute"
           end
           requirements.assert(:all_actions) do |a|
@@ -83,16 +84,16 @@ class Chef
         end
 
         def start_service
-          shell_out_with_systems_locale!(@new_resource.start_command)
+          shell_out!(@new_resource.start_command, default_env: false)
         end
 
         def stop_service
-          shell_out_with_systems_locale!(@new_resource.stop_command)
+          shell_out!(@new_resource.stop_command, default_env: false)
         end
 
         def restart_service
           if @new_resource.restart_command
-            shell_out_with_systems_locale!(@new_resource.restart_command)
+            shell_out!(@new_resource.restart_command, default_env: false)
           else
             stop_service
             sleep 1
@@ -101,7 +102,7 @@ class Chef
         end
 
         def reload_service
-          shell_out_with_systems_locale!(@new_resource.reload_command)
+          shell_out!(@new_resource.reload_command, default_env: false)
         end
 
         protected
@@ -116,9 +117,9 @@ class Chef
                 logger.trace("#{@new_resource} is running")
               end
             rescue Mixlib::ShellOut::ShellCommandFailed, SystemCallError
-            # ShellOut sometimes throws different types of Exceptions than ShellCommandFailed.
-            # Temporarily catching different types of exceptions here until we get Shellout fixed.
-            # TODO: Remove the line before one we get the ShellOut fix.
+              # ShellOut sometimes throws different types of Exceptions than ShellCommandFailed.
+              # Temporarily catching different types of exceptions here until we get Shellout fixed.
+              # TODO: Remove the line before one we get the ShellOut fix.
               @status_load_success = false
               @current_resource.running false
               nil
@@ -163,6 +164,7 @@ class Chef
         end
 
         def ps_cmd
+          # XXX: magic attributes are a shitty api, need something better here and deprecate this attribute
           @run_context.node[:command] && @run_context.node[:command][:ps]
         end
       end

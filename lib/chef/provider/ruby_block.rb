@@ -1,7 +1,7 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: AJ Christensen (<aj@chef.io>)
-# Copyright:: Copyright 2009-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,13 +20,13 @@
 class Chef
   class Provider
     class RubyBlock < Chef::Provider
-      provides :ruby_block
+      provides :ruby_block, target_mode: true
 
       def load_current_resource
         true
       end
 
-      def action_run
+      action :run do
         converge_by("execute the ruby block #{new_resource.name}") do
           new_resource.block.call
           logger.info("#{new_resource} called")

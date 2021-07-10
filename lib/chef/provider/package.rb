@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,27 +16,52 @@
 # limitations under the License.
 #
 
-require "chef/mixin/shell_out"
-require "chef/mixin/subclass_directive"
-require "chef/log"
-require "chef/file_cache"
-require "chef/platform"
-require "chef/decorator/lazy_array"
-require "shellwords"
+require_relative "../mixin/subclass_directive"
+require_relative "../log"
+require_relative "../file_cache"
+require_relative "../platform"
+require_relative "../decorator/lazy_array"
+require "shellwords" unless defined?(Shellwords)
 
 class Chef
   class Provider
     class Package < Chef::Provider
-      include Chef::Mixin::ShellOut
       extend Chef::Mixin::SubclassDirective
 
-      # subclasses declare this if they want all their arguments as arrays of packages and names
+      # subclasses declare this if they want all their arguments as arrays of packages and names.
+      # any new packages using this should also use allow_nils below.
+      #
       subclass_directive :use_multipackage_api
-      # subclasses declare this if they want sources (filenames) pulled from their package names
+
+      # subclasses declare this if they want sources (filenames) pulled from their package names.
+      # this is for package providers that take a path into the filesystem (rpm, dpkg).
+      #
       subclass_directive :use_package_name_for_source
+
       # keeps package_names_for_targets and versions_for_targets indexed the same as package_name at
-      # the cost of having the subclass needing to deal with nils
+      # the cost of having the subclass needing to deal with nils.  all providers are encouraged to
+      # migrate to using this as it simplifies dealing with package aliases in subclasses.
+      #
       subclass_directive :allow_nils
+
+      # subclasses that implement complex pattern matching using constraints, particularly the yum and
+      # dnf classes, should filter the installed version against the desired version constraint and
+      # return nil if it does not match.  this means that 'nil' does not mean that no version of the
+      # package is installed, but that the installed version does not satisfy the desired constraints.
+      # (the package plus the constraints are not installed)
+      #
+      # [ this may arguably be useful for all package providers and it greatly simplifies the logic
+      #   in the superclass that gets executed, so maybe this should always be used now? ]
+      #
+      # note that when using this feature that the current_resource.version must be loaded with the
+      # correct currently installed version, without doing the filtering -- for reporting and for
+      # correctly displaying version upgrades.  that means there are 3 different arrays which must be
+      # loaded by the subclass:  candidate_version, magic_version and current_resource.version.
+      #
+      # NOTE: magic_version is a terrible name, but I couldn't think of anything better, at least this
+      #       way it stands out clearly.
+      #
+      subclass_directive :use_magic_version
 
       #
       # Hook that subclasses use to populate the candidate_version(s)
@@ -68,8 +93,8 @@ class Chef
         # if not, shouldn't we raise to tell the user to use install instead of upgrade if they want to pin a version?
         requirements.assert(:install) do |a|
           a.assertion { candidates_exist_for_all_forced_changes? }
-          a.failure_message(Chef::Exceptions::Package, "No version specified, and no candidate version available for #{forced_packages_missing_candidates.join(', ')}")
-          a.whyrun("Assuming a repository that offers #{forced_packages_missing_candidates.join(', ')} would have been configured")
+          a.failure_message(Chef::Exceptions::Package, "No version specified, and no candidate version available for #{forced_packages_missing_candidates.join(", ")}")
+          a.whyrun("Assuming a repository that offers #{forced_packages_missing_candidates.join(", ")} would have been configured")
         end
 
         # XXX: Does it make sense to pass in a source with :upgrade? Probably
@@ -77,25 +102,18 @@ class Chef
         # so we'll just leave things as-is for now.
         requirements.assert(:upgrade, :install) do |a|
           a.assertion { candidates_exist_for_all_uninstalled? || new_resource.source }
-          a.failure_message(Chef::Exceptions::Package, "No candidate version available for #{packages_missing_candidates.join(', ')}")
-          a.whyrun("Assuming a repository that offers #{packages_missing_candidates.join(', ')} would have been configured")
+          a.failure_message(Chef::Exceptions::Package, "No candidate version available for #{packages_missing_candidates.join(", ")}")
+          a.whyrun("Assuming a repository that offers #{packages_missing_candidates.join(", ")} would have been configured")
         end
       end
 
       action :install do
         unless target_version_array.any?
-          logger.trace("#{new_resource} is already installed - nothing to do")
+          logger.debug("#{new_resource} is already installed - nothing to do")
           return
         end
 
-        # @todo: move the preseed code out of the base class (and complete the fix for Array of preseeds? ugh...)
-        if new_resource.response_file
-          if preseed_file = get_preseed_file(package_names_for_targets, versions_for_targets)
-            converge_by("preseed package #{package_names_for_targets}") do
-              preseed_package(preseed_file)
-            end
-          end
-        end
+        prepare_for_installation
 
         converge_by(install_description) do
           multipackage_api_adapter(package_names_for_targets, versions_for_targets) do |name, version|
@@ -109,6 +127,7 @@ class Chef
         description = []
         target_version_array.each_with_index do |target_version, i|
           next if target_version.nil?
+
           package_name = package_name_array[i]
           description << "install version #{target_version} of package #{package_name}"
         end
@@ -119,7 +138,7 @@ class Chef
 
       action :upgrade do
         unless target_version_array.any?
-          logger.trace("#{new_resource} no versions to upgrade - nothing to do")
+          logger.debug("#{new_resource} no versions to upgrade - nothing to do")
           return
         end
 
@@ -137,6 +156,7 @@ class Chef
         description = []
         target_version_array.each_with_index do |target_version, i|
           next if target_version.nil?
+
           package_name = package_name_array[i]
           candidate_version = candidate_version_array[i]
           current_version = current_version_array[i] || "uninstalled"
@@ -157,7 +177,7 @@ class Chef
             logger.info("#{new_resource} removed")
           end
         else
-          logger.trace("#{new_resource} package does not exist - nothing to do")
+          logger.debug("#{new_resource} package does not exist - nothing to do")
         end
       end
 
@@ -194,32 +214,7 @@ class Chef
         end
       end
 
-      action :reconfig do
-        if current_resource.version.nil?
-          logger.trace("#{new_resource} is NOT installed - nothing to do")
-          return
-        end
-
-        unless new_resource.response_file
-          logger.trace("#{new_resource} no response_file provided - nothing to do")
-          return
-        end
-
-        if preseed_file = get_preseed_file(new_resource.package_name, current_resource.version)
-          converge_by("reconfigure package #{new_resource.package_name}") do
-            preseed_package(preseed_file)
-            multipackage_api_adapter(new_resource.package_name, current_resource.version) do |name, version|
-              reconfig_package(name, version)
-
-            end
-            logger.info("#{new_resource} reconfigured")
-          end
-        else
-          logger.trace("#{new_resource} preseeding has not changed - nothing to do")
-        end
-      end
-
-      def action_lock
+      action :lock do
         packages_locked = if respond_to?(:packages_all_locked?, true)
                             packages_all_locked?(Array(new_resource.package_name), Array(new_resource.version))
                           else
@@ -234,11 +229,11 @@ class Chef
             end
           end
         else
-          logger.trace("#{new_resource} is already locked")
+          logger.debug("#{new_resource} is already locked")
         end
       end
 
-      def action_unlock
+      action :unlock do
         packages_unlocked = if respond_to?(:packages_all_unlocked?, true)
                               packages_all_unlocked?(Array(new_resource.package_name), Array(new_resource.version))
                             else
@@ -253,7 +248,7 @@ class Chef
             end
           end
         else
-          logger.trace("#{new_resource} is already unlocked")
+          logger.debug("#{new_resource} is already unlocked")
         end
       end
 
@@ -261,6 +256,9 @@ class Chef
       def package_locked(name, version)
         raise Chef::Exceptions::UnsupportedAction, "#{self} has no way to detect if package is locked"
       end
+
+      # Subclasses will override this to a method and provide a preseed file path
+      def prepare_for_installation; end
 
       # @todo use composition rather than inheritance
 
@@ -292,7 +290,7 @@ class Chef
         raise Chef::Exceptions::UnsupportedAction, "#{self} does not support pre-seeding package install/upgrade instructions"
       end
 
-      def reconfig_package(name, version)
+      def reconfig_package(name)
         raise( Chef::Exceptions::UnsupportedAction, "#{self} does not support :reconfig" )
       end
 
@@ -307,7 +305,7 @@ class Chef
       # used by subclasses.  deprecated.  use #a_to_s instead.
       def expand_options(options)
         # its deprecated but still work to do to deprecate it fully
-        #Chef.deprecated(:package_misc, "expand_options is deprecated, use shell_out_compact or shell_out_compact_timeout instead")
+        # Chef.deprecated(:package_misc, "expand_options is deprecated, use shell_out instead")
         if options
           " #{options.is_a?(Array) ? Shellwords.join(options) : options}"
         else
@@ -350,6 +348,7 @@ class Chef
       #
       def version_equals?(v1, v2)
         return false unless v1 && v2
+
         v1 == v2
       end
 
@@ -361,9 +360,14 @@ class Chef
       #
       # By default, this function will use Gem::Version comparison. Subclasses can reimplement this method
       # for package-management system specific versions.
+      #
+      # (In other words, pull requests to introduce domain specific mangling of versions into this method
+      # will be closed -- that logic must go into the subclass -- we understand that this is far from perfect
+      # but it is a better default than outright buggy things like v1.to_f <=> v2.to_f)
+      #
       def version_compare(v1, v2)
-        gem_v1 = Gem::Version.new(v1)
-        gem_v2 = Gem::Version.new(v2)
+        gem_v1 = Gem::Version.new(v1.gsub(/\A\s*(#{Gem::Version::VERSION_PATTERN}).*/, '\1'))
+        gem_v2 = Gem::Version.new(v2.gsub(/\A\s*(#{Gem::Version::VERSION_PATTERN}).*/, '\1'))
 
         gem_v1 <=> gem_v2
       end
@@ -377,46 +381,6 @@ class Chef
       #
       def version_requirement_satisfied?(current_version, new_version)
         target_version_already_installed?(current_version, new_version)
-      end
-
-      # @todo: extract apt/dpkg specific preseeding to a helper class
-      def get_preseed_file(name, version)
-        resource = preseed_resource(name, version)
-        resource.run_action(:create)
-        logger.trace("#{new_resource} fetched preseed file to #{resource.path}")
-
-        if resource.updated_by_last_action?
-          resource.path
-        else
-          false
-        end
-      end
-
-      # @todo: extract apt/dpkg specific preseeding to a helper class
-      def preseed_resource(name, version)
-        # A directory in our cache to store this cookbook's preseed files in
-        file_cache_dir = Chef::FileCache.create_cache_path("preseed/#{new_resource.cookbook_name}")
-        # The full path where the preseed file will be stored
-        cache_seed_to = "#{file_cache_dir}/#{name}-#{version}.seed"
-
-        logger.trace("#{new_resource} fetching preseed file to #{cache_seed_to}")
-
-        if template_available?(new_resource.response_file)
-          logger.trace("#{new_resource} fetching preseed file via Template")
-          remote_file = Chef::Resource::Template.new(cache_seed_to, run_context)
-          remote_file.variables(new_resource.response_file_variables)
-        elsif cookbook_file_available?(new_resource.response_file)
-          logger.trace("#{new_resource} fetching preseed file via cookbook_file")
-          remote_file = Chef::Resource::CookbookFile.new(cache_seed_to, run_context)
-        else
-          message = "No template or cookbook file found for response file #{new_resource.response_file}"
-          raise Chef::Exceptions::FileNotFound, message
-        end
-
-        remote_file.cookbook_name = new_resource.cookbook_name
-        remote_file.source(new_resource.response_file)
-        remote_file.backup(false)
-        remote_file
       end
 
       # helper method used by subclasses
@@ -474,24 +438,25 @@ class Chef
         @target_version_array ||=
           begin
             target_version_array = []
-
             each_package do |package_name, new_version, current_version, candidate_version|
               case action
               when :upgrade
-                if version_equals?(current_version, new_version)
-                  # this is an odd use case
-                  logger.trace("#{new_resource} #{package_name} #{new_version} is already installed -- you are equality pinning with an :upgrade action, this may be deprecated in the future")
-                  target_version_array.push(nil)
-                elsif version_equals?(current_version, candidate_version)
-                  logger.trace("#{new_resource} #{package_name} #{candidate_version} is already installed")
+                if current_version.nil?
+                  # with use_magic_version there may be a package installed, but it fails the user's
+                  # requested new_resource.version constraints
+                  logger.trace("#{new_resource} has no existing installed version. Installing install #{candidate_version}")
+                  target_version_array.push(candidate_version)
+                elsif !use_magic_version? && version_equals?(current_version, new_version)
+                  # this is a short-circuit (mostly for the rubygems provider) to avoid needing to expensively query the candidate_version which must come later
+                  logger.trace("#{new_resource} #{package_name} #{new_version} is already installed")
                   target_version_array.push(nil)
                 elsif candidate_version.nil?
                   logger.trace("#{new_resource} #{package_name} has no candidate_version to upgrade to")
                   target_version_array.push(nil)
-                elsif current_version.nil?
-                  logger.trace("#{new_resource} has no existing installed version. Installing install #{candidate_version}")
-                  target_version_array.push(candidate_version)
-                elsif version_compare(current_version, candidate_version) == 1 && !allow_downgrade
+                elsif version_equals?(current_version, candidate_version)
+                  logger.trace("#{new_resource} #{package_name} #{candidate_version} is already installed")
+                  target_version_array.push(nil)
+                elsif !allow_downgrade && version_compare(current_version, candidate_version) == 1
                   logger.trace("#{new_resource} #{package_name} has installed version #{current_version}, which is newer than available version #{candidate_version}. Skipping...)")
                   target_version_array.push(nil)
                 else
@@ -500,16 +465,20 @@ class Chef
                 end
 
               when :install
-
-                if new_version
+                if new_version && !use_magic_version?
                   if version_requirement_satisfied?(current_version, new_version)
-                    logger.trace("#{new_resource} #{package_name} #{current_version} satisifies #{new_version} requirement")
+                    logger.trace("#{new_resource} #{package_name} #{current_version} satisfies #{new_version} requirement")
+                    target_version_array.push(nil)
+                  elsif current_version && !allow_downgrade && version_compare(current_version, new_version) == 1
+                    logger.warn("#{new_resource} #{package_name} has installed version #{current_version}, which is newer than available version #{new_version}. Skipping...)")
                     target_version_array.push(nil)
                   else
                     logger.trace("#{new_resource} #{package_name} #{current_version} needs updating to #{new_version}")
                     target_version_array.push(new_version)
                   end
                 elsif current_version.nil?
+                  # with use_magic_version there may be a package installed, but it fails the user's
+                  # requested new_resource.version constraints
                   logger.trace("#{new_resource} #{package_name} not installed, installing #{candidate_version}")
                   target_version_array.push(candidate_version)
                 else
@@ -569,8 +538,15 @@ class Chef
             missing = []
             each_package do |package_name, new_version, current_version, candidate_version|
               next if new_version.nil? || current_version.nil?
-              if !version_requirement_satisfied?(current_version, new_version) && candidate_version.nil?
-                missing.push(package_name)
+
+              if use_magic_version?
+                if !magic_version && candidate_version.nil?
+                  missing.push(package_name)
+                end
+              else
+                if !version_requirement_satisfied?(current_version, new_version) && candidate_version.nil?
+                  missing.push(package_name)
+                end
               end
             end
             missing
@@ -583,7 +559,7 @@ class Chef
       def each_package
         package_name_array.each_with_index do |package_name, i|
           candidate_version = candidate_version_array[i]
-          current_version = current_version_array[i]
+          current_version = use_magic_version? ? magic_version[i] : current_version_array[i]
           new_version = new_version_array[i]
           yield package_name, new_version, current_version, candidate_version
         end
@@ -622,12 +598,10 @@ class Chef
       # @return [Array] new_resource.source as an array
       def source_array
         @source_array ||=
-          begin
-            if new_resource.source.nil?
-              package_name_array.map { nil }
-            else
-              [ new_resource.source ].flatten
-            end
+          if new_resource.source.nil?
+            package_name_array.map { nil }
+          else
+            [ new_resource.source ].flatten
           end
       end
 
@@ -636,59 +610,24 @@ class Chef
       # @return [Array] Array of sources with package_names converted to sources
       def resolved_source_array
         @resolved_source_array ||=
-          begin
-            source_array.each_with_index.map do |source, i|
-              package_name = package_name_array[i]
-              # we require at least one '/' in the package_name to avoid [XXX_]package 'foo' breaking due to a random 'foo' file in cwd
-              if use_package_name_for_source? && source.nil? && package_name.match(/#{::File::SEPARATOR}/) && ::File.exist?(package_name)
-                logger.trace("No package source specified, but #{package_name} exists on filesystem, using #{package_name} as source.")
-                package_name
-              else
-                source
-              end
+          source_array.each_with_index.map do |source, i|
+            package_name = package_name_array[i]
+            # we require at least one '/' in the package_name to avoid [XXX_]package 'foo' breaking due to a random 'foo' file in cwd
+            if use_package_name_for_source? && source.nil? && package_name.match(/#{::File::SEPARATOR}/) && ::File.exist?(package_name)
+              logger.trace("No package source specified, but #{package_name} exists on filesystem, using #{package_name} as source.")
+              package_name
+            else
+              source
             end
           end
-      end
-
-      # @todo: extract apt/dpkg specific preseeding to a helper class
-      def template_available?(path)
-        run_context.has_template_in_cookbook?(new_resource.cookbook_name, path)
-      end
-
-      # @todo: extract apt/dpkg specific preseeding to a helper class
-      def cookbook_file_available?(path)
-        run_context.has_cookbook_file_in_cookbook?(new_resource.cookbook_name, path)
       end
 
       def allow_downgrade
         if new_resource.respond_to?("allow_downgrade")
           new_resource.allow_downgrade
         else
-          false
+          true
         end
-      end
-
-      def shell_out_with_timeout(*command_args)
-        shell_out(*add_timeout_option(command_args))
-      end
-
-      def shell_out_with_timeout!(*command_args)
-        shell_out!(*add_timeout_option(command_args))
-      end
-
-      def add_timeout_option(command_args)
-        # this is deprecated but its not quite done yet
-        #Chef.deprecated(:package_misc, "shell_out_with_timeout and add_timeout_option are deprecated methods, use shell_out_compact_timeout instead")
-        args = command_args.dup
-        if args.last.is_a?(Hash)
-          options = args.pop.dup
-          options[:timeout] = new_resource.timeout if new_resource.timeout
-          options[:timeout] = 900 unless options.key?(:timeout)
-          args << options
-        else
-          args << { timeout: new_resource.timeout ? new_resource.timeout : 900 }
-        end
-        args
       end
     end
   end

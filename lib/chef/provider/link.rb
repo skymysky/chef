@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,13 +16,13 @@
 # limitations under the License.
 #
 
-require "chef/config"
-require "chef/log"
-require "chef/mixin/file_class"
-require "chef/resource/link"
-require "chef/provider"
-require "chef/scan_access_control"
-require "chef/util/path_helper"
+require_relative "../config"
+require_relative "../log"
+require_relative "../mixin/file_class"
+require_relative "../resource/link"
+require_relative "../provider"
+require_relative "../scan_access_control"
+require_relative "../util/path_helper"
 
 class Chef
   class Provider
@@ -32,15 +32,6 @@ class Chef
 
       include Chef::Mixin::EnforceOwnershipAndPermissions
       include Chef::Mixin::FileClass
-
-      def negative_complement(big)
-        if big > 1073741823 # Fixnum max
-          big -= (2**32) # diminished radix wrap to negative
-        end
-        big
-      end
-
-      private :negative_complement
 
       def load_current_resource
         @current_resource = Chef::Resource::Link.new(new_resource.name)
@@ -82,10 +73,10 @@ class Chef
       end
 
       def canonicalize(path)
-        Chef::Platform.windows? ? path.tr("/", '\\') : path
+        ChefUtils.windows? ? path.tr("/", "\\") : path
       end
 
-      def action_create
+      action :create do
         # current_resource is the symlink that currently exists
         # new_resource is the symlink we need to create
         #   to - the location to link to
@@ -101,7 +92,7 @@ class Chef
             # However if the new symlink will point to a file and the current symlink is pointing at a
             # directory we want to throw an exception and calling ::File.unlink on the directory symlink
             # will throw the correct ones.
-            if Chef::Platform.windows? && ::File.directory?(new_resource.to) &&
+            if ChefUtils.windows? && ::File.directory?(new_resource.to) &&
                 ::File.directory?(current_resource.target_file)
               converge_by("unlink existing windows symlink to dir at #{new_resource.target_file}") do
                 ::Dir.unlink(new_resource.target_file)
@@ -115,7 +106,7 @@ class Chef
           if new_resource.link_type == :symbolic
             converge_by("create symlink at #{new_resource.target_file} to #{new_resource.to}") do
               file_class.symlink(canonicalize(new_resource.to), new_resource.target_file)
-              logger.trace("#{new_resource} created #{new_resource.link_type} link from #{new_resource.target_file} -> #{new_resource.to}")
+              logger.debug("#{new_resource} created #{new_resource.link_type} link from #{new_resource.target_file} -> #{new_resource.to}")
               logger.info("#{new_resource} created")
               # file_class.symlink will create the link with default access controls.
               # This means that the access controls of the file could be different
@@ -127,7 +118,7 @@ class Chef
           elsif new_resource.link_type == :hard
             converge_by("create hard link at #{new_resource.target_file} to #{new_resource.to}") do
               file_class.link(new_resource.to, new_resource.target_file)
-              logger.trace("#{new_resource} created #{new_resource.link_type} link from #{new_resource.target_file} -> #{new_resource.to}")
+              logger.debug("#{new_resource} created #{new_resource.link_type} link from #{new_resource.target_file} -> #{new_resource.to}")
               logger.info("#{new_resource} created")
             end
           end
@@ -141,9 +132,9 @@ class Chef
         end
       end
 
-      def action_delete
+      action :delete do
         if current_resource.to # Exists
-          if Chef::Platform.windows? && ::File.directory?(current_resource.target_file)
+          if ChefUtils.windows? && ::File.directory?(current_resource.target_file)
             converge_by("delete link to dir at #{new_resource.target_file}") do
               ::Dir.delete(new_resource.target_file)
               logger.info("#{new_resource} deleted")

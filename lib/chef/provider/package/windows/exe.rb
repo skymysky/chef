@@ -1,7 +1,7 @@
 #
 # Author:: Seth Chisamore (<schisamo@chef.io>)
 # Author:: Matt Wrock <matt@mattwrock.com>
-# Copyright:: Copyright 2011-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 # limitations under the License.
 #
 
-require "chef/mixin/shell_out"
+require_relative "../../../mixin/shell_out"
 
 class Chef
   class Provider
@@ -64,17 +64,17 @@ class Chef
                 unattended_flags,
                 expand_options(new_resource.options),
                 "& exit %%%%ERRORLEVEL%%%%",
-              ].join(" "), timeout: new_resource.timeout, returns: new_resource.returns
+              ].join(" "), default_env: false, timeout: new_resource.timeout, returns: new_resource.returns, sensitive: new_resource.sensitive
             )
           end
 
           def remove_package
             uninstall_version = new_resource.version || current_installed_version
             uninstall_entries.select { |entry| [uninstall_version].flatten.include?(entry.display_version) }
-                             .map(&:uninstall_string).uniq.each do |uninstall_string|
-              logger.trace("Registry provided uninstall string for #{new_resource} is '#{uninstall_string}'")
-              shell_out!(uninstall_command(uninstall_string), timeout: new_resource.timeout, returns: new_resource.returns)
-            end
+              .map(&:uninstall_string).uniq.each do |uninstall_string|
+                logger.trace("Registry provided uninstall string for #{new_resource} is '#{uninstall_string}'")
+                shell_out!(uninstall_command(uninstall_string), default_env: false, timeout: new_resource.timeout, returns: new_resource.returns)
+              end
           end
 
           private

@@ -2,7 +2,7 @@
 # Author:: Prajakta Purohit (<prajakta@chef.io>)
 # Author:: Lamont Granquist (<lamont@chef.io>)
 #
-# Copyright:: Copyright 2012-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,22 +16,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-require "chef/reserved_names"
-require "chef/win32/api"
-require "chef/mixin/wide_string"
+require_relative "../reserved_names"
+require_relative "api"
+require_relative "../mixin/wide_string"
 
-if RUBY_PLATFORM =~ /mswin|mingw32|windows/
-  require "chef/monkey_patches/win32/registry"
-  require "chef/win32/api/registry"
-  require "win32/registry"
+if RUBY_PLATFORM.match?(/mswin|mingw32|windows/)
   require "win32/api"
+  module Win32
+    autoload :Registry, File.expand_path("../monkey_patches/win32/registry", __dir__)
+  end
+  require_relative "api/registry"
 end
 
 class Chef
   class Win32
     class Registry
 
-      if RUBY_PLATFORM =~ /mswin|mingw32|windows/
+      if RUBY_PLATFORM.match?(/mswin|mingw32|windows/)
         include Chef::ReservedNames::Win32::API::Registry
         extend Chef::ReservedNames::Win32::API::Registry
       end
@@ -56,7 +57,7 @@ class Chef
         hive, key = get_hive_and_key(key_path)
         key_exists!(key_path)
         values = hive.open(key, ::Win32::Registry::KEY_READ | registry_system_architecture) do |reg|
-          reg.map { |name, type, data| { :name => name, :type => get_name_from_type(type), :data => data } }
+          reg.map { |name, type, data| { name: name, type: get_name_from_type(type), data: data } }
         end
       end
 
@@ -132,6 +133,7 @@ class Chef
         if has_subkeys?(key_path) && !recursive
           raise Chef::Exceptions::Win32RegNoRecursive, "Registry key #{key_path} has subkeys, and recursive not specified"
         end
+
         hive, key_including_parent = get_hive_and_key(key_path)
         # key_including_parent: Software\\Root\\Branch\\Fruit
         # key => Fruit
@@ -153,7 +155,7 @@ class Chef
             return true
           end
         rescue ::Win32::Registry::Error => e
-          return false
+          false
         end
       end
 
@@ -161,6 +163,7 @@ class Chef
         unless key_exists?(key_path)
           raise Chef::Exceptions::Win32RegKeyMissing, "Registry key #{key_path} does not exist"
         end
+
         true
       end
 
@@ -226,6 +229,7 @@ class Chef
         unless value_exists?(key_path, value)
           raise Chef::Exceptions::Win32RegValueMissing, "Registry key #{key_path} has no value named #{value[:name]}"
         end
+
         true
       end
 
@@ -233,6 +237,7 @@ class Chef
         unless data_exists?(key_path, value)
           raise Chef::Exceptions::Win32RegDataMissing, "Registry key #{key_path} has no value named #{value[:name]}, containing type #{value[:type]} and data #{value[:data]}"
         end
+
         true
       end
 
@@ -279,6 +284,7 @@ class Chef
         if val.is_a? String
           return val.downcase
         end
+
         val
       end
 
@@ -321,13 +327,13 @@ class Chef
 
       def _type_name_map
         {
-          :binary => ::Win32::Registry::REG_BINARY,
-          :string => ::Win32::Registry::REG_SZ,
-          :multi_string => ::Win32::Registry::REG_MULTI_SZ,
-          :expand_string => ::Win32::Registry::REG_EXPAND_SZ,
-          :dword => ::Win32::Registry::REG_DWORD,
-          :dword_big_endian => ::Win32::Registry::REG_DWORD_BIG_ENDIAN,
-          :qword => ::Win32::Registry::REG_QWORD,
+          binary: ::Win32::Registry::REG_BINARY,
+          string: ::Win32::Registry::REG_SZ,
+          multi_string: ::Win32::Registry::REG_MULTI_SZ,
+          expand_string: ::Win32::Registry::REG_EXPAND_SZ,
+          dword: ::Win32::Registry::REG_DWORD,
+          dword_big_endian: ::Win32::Registry::REG_DWORD_BIG_ENDIAN,
+          qword: ::Win32::Registry::REG_QWORD,
         }
       end
 
@@ -336,7 +342,7 @@ class Chef
       end
 
       def get_type_from_num(val_type)
-        value = {
+        {
           3 => ::Win32::Registry::REG_BINARY,
           1 => ::Win32::Registry::REG_SZ,
           7 => ::Win32::Registry::REG_MULTI_SZ,
@@ -345,7 +351,6 @@ class Chef
           5 => ::Win32::Registry::REG_DWORD_BIG_ENDIAN,
           11 => ::Win32::Registry::REG_QWORD,
         }[val_type]
-        value
       end
 
       def create_missing(key_path)
@@ -356,7 +361,7 @@ class Chef
         hive, key = get_hive_and_key(key_path)
         missing_key_arr.each do |intermediate_key|
           existing_key_path = existing_key_path << "\\" << intermediate_key
-          if !key_exists?(existing_key_path)
+          unless key_exists?(existing_key_path)
             Chef::Log.trace("Recursively creating registry key #{existing_key_path}")
             hive.create(get_key(existing_key_path), ::Win32::Registry::KEY_ALL_ACCESS | registry_system_architecture)
           end

@@ -1,8 +1,8 @@
 #
 # Author:: Daniel DeLeo (<dan@chef.io>)
 # Author:: Tyler Cloke (<tyler@chef.io>)
-# Copyright:: Copyright 2010-2017, Chef Software Inc.
-#p License:: Apache License, Version 2.0
+# Copyright:: Copyright (c) Chef Software Inc.
+# p License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ describe Chef::Resource::CookbookFile do
 
   describe "when it has a backup number, group, mode, owner, source, checksum, and cookbook on nix or path, rights, deny_rights, checksum on windows" do
     before do
-      if Chef::Platform.windows?
+      if ChefUtils.windows?
         resource.path("C:/temp/origin/file.txt")
         resource.rights(:read, "Everyone")
         resource.deny_rights(:full_control, "Clumsy_Sam")
@@ -70,10 +70,10 @@ describe Chef::Resource::CookbookFile do
 
     it "describes the state" do
       state = resource.state_for_resource_reporter
-      if Chef::Platform.windows?
+      if ChefUtils.windows?
         puts state
-        expect(state[:rights]).to eq([{ :permissions => :read, :principals => "Everyone" }])
-        expect(state[:deny_rights]).to eq([{ :permissions => :full_control, :principals => "Clumsy_Sam" }])
+        expect(state[:rights]).to eq([{ permissions: :read, principals: "Everyone" }])
+        expect(state[:deny_rights]).to eq([{ permissions: :full_control, principals: "Clumsy_Sam" }])
       else
         expect(state[:group]).to eq("wheel")
         expect(state[:mode]).to eq("0664")
@@ -83,7 +83,7 @@ describe Chef::Resource::CookbookFile do
     end
 
     it "returns the path as its identity" do
-      if Chef::Platform.windows?
+      if ChefUtils.windows?
         expect(resource.identity).to eq("C:/temp/origin/file.txt")
       else
         expect(resource.identity).to eq("/tmp/origin/file.txt")

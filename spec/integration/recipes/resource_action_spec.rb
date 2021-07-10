@@ -1,22 +1,23 @@
+require "spec_helper"
 require "support/shared/integration/integration_helper"
 
 class NoActionJackson < Chef::Resource
-  use_automatic_resource_name
+  provides :no_action_jackson
 
   def foo(value = nil)
     @foo = value if value
     @foo
   end
 
-  class <<self
+  class << self
     attr_accessor :action_was
   end
 end
 
 class WeirdActionJackson < Chef::Resource
-  use_automatic_resource_name
+  provides :weird_action_jackson
 
-  class <<self
+  class << self
     attr_accessor :action_was
   end
 
@@ -154,7 +155,7 @@ module ResourceActionSpec
             ResourceActionSpec::ActionJackson.ruby_block_converged = ResourceActionSpec::ActionJackson.succeeded
           end
         end
-      EOM
+        EOM
         expect(ActionJackson.ran_action).to eq :access_attribute
         expect(ActionJackson.succeeded).to eq "foo!"
         expect(ActionJackson.ruby_block_converged).to eq "foo!"
@@ -163,7 +164,8 @@ module ResourceActionSpec
 
     context "With resource 'action_jackson'" do
       class ActionJackson < Chef::Resource
-        use_automatic_resource_name
+        provides :action_jackson
+
         def foo(value = nil)
           @foo = value if value
           @foo
@@ -174,7 +176,7 @@ module ResourceActionSpec
           @blarghle
         end
 
-        class <<self
+        class << self
           attr_accessor :ran_action
           attr_accessor :succeeded
           attr_accessor :ruby_block_converged
@@ -221,6 +223,10 @@ module ResourceActionSpec
           ActionJackson.succeeded = ActionJackson.ruby_block_converged
         end
 
+        action :test1, description: "Original description" do
+          true
+        end
+
         def foo_public
           "foo_public!"
         end
@@ -256,7 +262,7 @@ module ResourceActionSpec
       context "And 'action_jackgrandson' inheriting from ActionJackson and changing nothing" do
         before(:each) do
           class ActionJackgrandson < ActionJackson
-            use_automatic_resource_name
+            provides :action_jackgrandson
           end
         end
 
@@ -267,7 +273,7 @@ module ResourceActionSpec
 
       context "And 'action_jackalope' inheriting from ActionJackson with an extra attribute, action and custom method" do
         class ActionJackalope < ActionJackson
-          use_automatic_resource_name
+          provides :action_jackalope
 
           def foo(value = nil)
             @foo = "#{value}alope" if value
@@ -278,7 +284,7 @@ module ResourceActionSpec
             @bar = "#{value}alope" if value
             @bar
           end
-          class <<self
+          class << self
             attr_accessor :load_current_resource_ran
             attr_accessor :jackalope_ran
           end
@@ -291,7 +297,12 @@ module ResourceActionSpec
             ActionJackalope.jackalope_ran = :access_attribute
             ActionJackalope.succeeded = ActionJackson.succeeded
           end
+
+          action :test1, description: "An old action with a new description" do
+            super
+          end
         end
+
         before do
           ActionJackalope.jackalope_ran = nil
           ActionJackalope.load_current_resource_ran = nil
@@ -342,6 +353,11 @@ module ResourceActionSpec
           expect(ActionJackalope.succeeded).to eq "foo!alope blarghle! bar!alope"
         end
 
+        it "allows overridden action to have a description separate from the action defined in the base resource" do
+          expect(ActionJackson.action_description(:test1)).to eql "Original description"
+          expect(ActionJackalope.action_description(:test1)).to eql "An old action with a new description"
+        end
+
         it "non-overridden actions run and can access overridden and non-overridden variables (but not necessarily new ones)" do
           converge do
             action_jackalope "hi" do
@@ -380,7 +396,7 @@ module ResourceActionSpec
 
     context "With a resource with a set_or_return property named group (same name as a resource)" do
       class ResourceActionSpecWithGroupAction < Chef::Resource
-        resource_name :resource_action_spec_set_group_to_nil
+        provides :resource_action_spec_set_group_to_nil
         action :set_group_to_nil do
           # Access x during converge to ensure that we emit no warnings there
           resource_action_spec_with_group "hi" do
@@ -391,7 +407,7 @@ module ResourceActionSpec
       end
 
       class ResourceActionSpecWithGroup < Chef::Resource
-        resource_name :resource_action_spec_with_group
+        provides :resource_action_spec_with_group
         def group(value = nil)
           set_or_return(:group, value, {})
         end
@@ -408,7 +424,8 @@ module ResourceActionSpec
 
     context "When a resource has a property with the same name as another resource" do
       class HasPropertyNamedTemplate < Chef::Resource
-        use_automatic_resource_name
+        provides :has_property_named_template
+
         property :template
         action :create do
           template "x" do
@@ -420,7 +437,8 @@ module ResourceActionSpec
 
     context "When a resource declares methods in action_class" do
       class DeclaresActionClassMethods < Chef::Resource
-        use_automatic_resource_name
+        provides :declares_action_class_methods
+
         property :x
         action_class do
           def a
@@ -452,7 +470,8 @@ module ResourceActionSpec
 
       context "And a subclass overrides a method with an action_class block" do
         class DeclaresActionClassMethodsToo < DeclaresActionClassMethods
-          use_automatic_resource_name
+          provides :declares_action_class_methods_too
+
           action_class do
             def a
               5
@@ -477,7 +496,8 @@ module ResourceActionSpec
       context "And a subclass overrides a method with class_eval" do
         # this tests inheritance with *only* an action_class accessor that does not declare a block
         class DeclaresActionClassMethodsToo < DeclaresActionClassMethods
-          use_automatic_resource_name
+          provides :declares_action_class_methods_too
+
           action_class.class_eval <<-EOM
             def a
               5

@@ -1,6 +1,6 @@
 
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -111,8 +111,7 @@ describe Chef::Runner do
 
     it "should use the provider specified by the resource (if it has one)" do
       provider = Chef::Provider::Easy.new(run_context.resource_collection[0], run_context)
-      # Expect provider to be called twice, because will fall back to old provider lookup
-      expect(run_context.resource_collection[0]).to receive(:provider).twice.and_return(Chef::Provider::Easy)
+      expect(run_context.resource_collection[0]).to receive(:provider).once.and_return(Chef::Provider::Easy)
       expect(Chef::Provider::Easy).to receive(:new).once.and_return(provider)
       runner.converge
     end
@@ -258,10 +257,10 @@ describe Chef::Runner do
       end
       expect(exception).to be_a(Chef::Exceptions::MultipleFailures)
 
-      expected_message = <<-E
-Multiple failures occurred:
-* FailureProvider::ChefClientFail occurred in delayed notification: [explode] (dynamically defined) had an error: FailureProvider::ChefClientFail: chef had an error of some sort
-* FailureProvider::ChefClientFail occurred in delayed notification: [explode again] (dynamically defined) had an error: FailureProvider::ChefClientFail: chef had an error of some sort
+      expected_message = <<~E
+        Multiple failures occurred:
+        * FailureProvider::ChefClientFail occurred in delayed notification: [explode] (dynamically defined) had an error: FailureProvider::ChefClientFail: chef had an error of some sort
+        * FailureProvider::ChefClientFail occurred in delayed notification: [explode again] (dynamically defined) had an error: FailureProvider::ChefClientFail: chef had an error of some sort
       E
       expect(exception.message).to eq(expected_message)
 
@@ -295,7 +294,7 @@ Multiple failures occurred:
       # execution, and schedule delayed actions :second and :third on the first
       # resource. The duplicate actions should "collapse" to a single notification
       # and order should be preserved.
-      expect(SnitchyProvider.all_actions_called).to eq([:first, :first, :second, :third])
+      expect(SnitchyProvider.all_actions_called).to eq(%i{first first second third})
     end
 
     it "executes delayed notifications in the order they were declared" do
@@ -321,7 +320,7 @@ Multiple failures occurred:
       third_resource.notifies(:third_action, first_resource, :delayed)
 
       runner.converge
-      expect(SnitchyProvider.all_actions_called).to eq([:first, :first, :second, :third])
+      expect(SnitchyProvider.all_actions_called).to eq(%i{first first second third})
     end
 
     it "does not fire notifications if the resource was not updated by the last action executed" do
@@ -347,7 +346,7 @@ Multiple failures occurred:
       runner.converge
 
       # All of the resources should only fire once:
-      expect(SnitchyProvider.all_actions_called).to eq([:first, :second, :third])
+      expect(SnitchyProvider.all_actions_called).to eq(%i{first second third})
 
       # all of the resources should be marked as updated for reporting purposes
       expect(first_resource).to be_updated

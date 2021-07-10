@@ -1,6 +1,6 @@
 #
 # Author:: Nimisha Sharad (<nimisha.sharad@msystechnologies.com>)
-# Copyright:: Copyright (c) 2017 Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +20,10 @@ require "spec_helper"
 
 describe Chef::Resource::WindowsPath, :windows_only do
   let(:path) { "test_path" }
+
+  let(:run_context) do
+    Chef::RunContext.new(Chef::Node.new, {}, Chef::EventDispatch::Dispatcher.new)
+  end
 
   before(:all) do
     @old_path = ENV["PATH"].dup

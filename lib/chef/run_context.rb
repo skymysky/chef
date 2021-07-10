@@ -2,7 +2,7 @@
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Christopher Walters (<cw@chef.io>)
 # Author:: Tim Hinderliter (<tim@chef.io>)
-# Copyright:: Copyright 2008-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,23 +17,42 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require "chef/resource_collection"
-require "chef/cookbook_version"
-require "chef/node"
-require "chef/role"
-require "chef/log"
-require "chef/recipe"
-require "chef/run_context/cookbook_compiler"
-require "chef/event_dispatch/events_output_stream"
-require "forwardable"
+require_relative "resource_collection"
+require_relative "cookbook_version"
+require_relative "node"
+require_relative "role"
+require_relative "log"
+require_relative "recipe"
+require_relative "run_context/cookbook_compiler"
+require_relative "event_dispatch/events_output_stream"
+require_relative "train_transport"
+require_relative "exceptions"
+require "forwardable" unless defined?(Forwardable)
+autoload :Set, "set"
 
 class Chef
 
   # Value object that loads and tracks the context of a Chef run
   class RunContext
+    extend Forwardable
+
     #
     # Global state
     #
+
+    # Common rest object for using to talk to the Chef Server, this strictly 'validates' utf8
+    # and will throw.  (will be nil on solo-legacy runs)
+    #
+    # @return [Chef::ServerAPI]
+    #
+    attr_accessor :rest
+
+    # Common rest object for using to talk to the Chef Server, this has utf8 sanitization turned
+    # on and will replace invalid utf8 with valid characters.  (will be nil on solo-legacy runs)
+    #
+    # @return [Chef::ServerAPI]
+    #
+    attr_accessor :rest_clean
 
     #
     # The node for this run
@@ -57,14 +76,12 @@ class Chef
     #
     attr_reader :definitions
 
-    #
     # Event dispatcher for this run.
     #
     # @return [Chef::EventDispatch::Dispatcher]
     #
-    attr_reader :events
+    attr_accessor :events
 
-    #
     # Hash of factoids for a reboot request.
     #
     # @return [Hash]
@@ -75,7 +92,6 @@ class Chef
     # Scoped state
     #
 
-    #
     # The parent run context.
     #
     # @return [Chef::RunContext] The parent run context, or `nil` if this is the
@@ -83,7 +99,6 @@ class Chef
     #
     attr_reader :parent_run_context
 
-    #
     # The root run context.
     #
     # @return [Chef::RunContext] The root run context.
@@ -94,7 +109,6 @@ class Chef
       rc
     end
 
-    #
     # The collection of resources intended to be converged (and able to be
     # notified).
     #
@@ -104,12 +118,12 @@ class Chef
     #
     attr_reader :resource_collection
 
+    # Handle to the global action_collection of executed actions for reporting / data_collector /etc
     #
-    # The list of control groups to execute during the audit phase
+    # @return [Chef::ActionCollection
     #
-    attr_reader :audits
+    attr_accessor :action_collection
 
-    #
     # Pointer back to the Chef::Runner that created this
     #
     attr_accessor :runner
@@ -118,7 +132,6 @@ class Chef
     # Notification handling
     #
 
-    #
     # A Hash containing the before notifications triggered by resources
     # during the converge phase of the chef run.
     #
@@ -127,7 +140,6 @@ class Chef
     #
     attr_reader :before_notification_collection
 
-    #
     # A Hash containing the immediate notifications triggered by resources
     # during the converge phase of the chef run.
     #
@@ -136,7 +148,6 @@ class Chef
     #
     attr_reader :immediate_notification_collection
 
-    #
     # A Hash containing the delayed (end of run) notifications triggered by
     # resources during the converge phase of the chef run.
     #
@@ -145,7 +156,6 @@ class Chef
     #
     attr_reader :delayed_notification_collection
 
-    #
     # An Array containing the delayed (end of run) notifications triggered by
     # resources during the converge phase of the chef run.
     #
@@ -153,7 +163,16 @@ class Chef
     #
     attr_reader :delayed_actions
 
+    # A Set keyed by the string name, of all the resources that are updated.  We do not
+    # track actions or individual resource objects, since this matches the behavior of
+    # the notification collections which are keyed by Strings.
     #
+    attr_reader :updated_resources
+
+    # @return [Boolean] If the resource_collection is in unified_mode (no separate converge phase)
+    #
+    def_delegator :resource_collection, :unified_mode
+
     # A child of the root Chef::Log logging object.
     #
     # @return Mixlib::Log::Child A child logger
@@ -169,23 +188,28 @@ class Chef
     # @param events [EventDispatch::Dispatcher] The event dispatcher for this
     #   run.
     #
-    def initialize(node, cookbook_collection, events, logger = nil)
-      @node = node
-      @cookbook_collection = cookbook_collection
+    def initialize(node = nil, cookbook_collection = nil, events = nil, logger = nil)
       @events = events
       @logger = logger || Chef::Log.with_child
-
-      node.run_context = self
-      node.set_cookbook_attribute
-
-      @definitions = Hash.new
+      self.node = node if node
+      self.cookbook_collection = cookbook_collection if cookbook_collection
+      @definitions = {}
       @loaded_recipes_hash = {}
       @loaded_attributes_hash = {}
       @reboot_info = {}
       @cookbook_compiler = nil
-      @delayed_actions = []
 
       initialize_child_state
+    end
+
+    def node=(node)
+      @node = node
+      node.run_context = self
+    end
+
+    def cookbook_collection=(cookbook_collection)
+      @cookbook_collection = cookbook_collection
+      node.set_cookbook_attribute
     end
 
     #
@@ -203,12 +227,12 @@ class Chef
     # Initialize state that applies to both Chef::RunContext and Chef::ChildRunContext
     #
     def initialize_child_state
-      @audits = {}
       @resource_collection = Chef::ResourceCollection.new(self)
       @before_notification_collection = Hash.new { |h, k| h[k] = [] }
       @immediate_notification_collection = Hash.new { |h, k| h[k] = [] }
       @delayed_notification_collection = Hash.new { |h, k| h[k] = [] }
       @delayed_actions = []
+      @updated_resources = Set.new
     end
 
     #
@@ -220,6 +244,10 @@ class Chef
       # Note for the future, notification.notifying_resource may be an instance
       # of Chef::Resource::UnresolvedSubscribes when calling {Resource#subscribes}
       # with a string value.
+      if unified_mode && updated_resources.include?(notification.notifying_resource.declared_key)
+        raise Chef::Exceptions::UnifiedModeBeforeSubscriptionEarlierResource.new(notification)
+      end
+
       before_notification_collection[notification.notifying_resource.declared_key] << notification
     end
 
@@ -244,11 +272,13 @@ class Chef
       # Note for the future, notification.notifying_resource may be an instance
       # of Chef::Resource::UnresolvedSubscribes when calling {Resource#subscribes}
       # with a string value.
+      if unified_mode && updated_resources.include?(notification.notifying_resource.declared_key)
+        add_delayed_action(notification)
+      end
       delayed_notification_collection[notification.notifying_resource.declared_key] << notification
     end
 
-    #
-    # Adds a delayed action to the +delayed_actions+.
+    # Adds a delayed action to the delayed_actions collection
     #
     def add_delayed_action(notification)
       if delayed_actions.any? { |existing_notification| existing_notification.duplicates?(notification) }
@@ -259,32 +289,45 @@ class Chef
       end
     end
 
-    #
     # Get the list of before notifications sent by the given resource.
     #
     # @return [Array[Notification]]
     #
     def before_notifications(resource)
-      before_notification_collection[resource.declared_key]
+      key = resource.is_a?(String) ? resource : resource.declared_key
+      before_notification_collection[key]
     end
 
-    #
     # Get the list of immediate notifications sent by the given resource.
     #
     # @return [Array[Notification]]
     #
     def immediate_notifications(resource)
-      immediate_notification_collection[resource.declared_key]
+      key = resource.is_a?(String) ? resource : resource.declared_key
+      immediate_notification_collection[key]
     end
 
+    # Get the list of immediate notifications pending to the given resource
     #
+    # @return [Array[Notification]]
+    #
+    def reverse_immediate_notifications(resource)
+      immediate_notification_collection.map do |k, v|
+        v.select do |n|
+          (n.resource.is_a?(String) && n.resource == resource.declared_key) ||
+            n.resource == resource
+        end
+      end.flatten
+    end
+
     # Get the list of delayed (end of run) notifications sent by the given
     # resource.
     #
     # @return [Array[Notification]]
     #
     def delayed_notifications(resource)
-      delayed_notification_collection[resource.declared_key]
+      key = resource.is_a?(String) ? resource : resource.declared_key
+      delayed_notification_collection[key]
     end
 
     #
@@ -301,7 +344,7 @@ class Chef
     # @see DSL::IncludeRecipe#include_recipe
     #
     def include_recipe(*recipe_names, current_cookbook: nil)
-      result_recipes = Array.new
+      result_recipes = []
       recipe_names.flatten.each do |recipe_name|
         if result = load_recipe(recipe_name, current_cookbook: current_cookbook)
           result_recipes << result
@@ -331,13 +374,13 @@ class Chef
       cookbook_name, recipe_short_name = Chef::Recipe.parse_recipe_name(recipe_name, current_cookbook: current_cookbook)
 
       if unreachable_cookbook?(cookbook_name) # CHEF-4367
-        logger.warn(<<-ERROR_MESSAGE)
-MissingCookbookDependency:
-Recipe `#{recipe_name}` is not in the run_list, and cookbook '#{cookbook_name}'
-is not a dependency of any cookbook in the run_list.  To load this recipe,
-first add a dependency on cookbook '#{cookbook_name}' in the cookbook you're
-including it from in that cookbook's metadata.
-ERROR_MESSAGE
+        logger.warn(<<~ERROR_MESSAGE)
+          MissingCookbookDependency:
+          Recipe `#{recipe_name}` is not in the run_list, and cookbook '#{cookbook_name}'
+          is not a dependency of any cookbook in the run_list.  To load this recipe,
+          first add a dependency on cookbook '#{cookbook_name}' in the cookbook you're
+          including it from in that cookbook's metadata.
+        ERROR_MESSAGE
       end
 
       if loaded_fully_qualified_recipe?(cookbook_name, recipe_short_name)
@@ -361,7 +404,7 @@ ERROR_MESSAGE
     # @raise [Chef::Exceptions::RecipeNotFound] If the file does not exist.
     #
     def load_recipe_file(recipe_file)
-      if !File.exist?(recipe_file)
+      unless File.exist?(recipe_file)
         raise Chef::Exceptions::RecipeNotFound, "could not find recipe file #{recipe_file}"
       end
 
@@ -433,7 +476,7 @@ ERROR_MESSAGE
     # @return [Boolean] `true` if the recipe has been loaded, `false` otherwise.
     #
     def loaded_fully_qualified_recipe?(cookbook, recipe)
-      loaded_recipes_hash.has_key?("#{cookbook}::#{recipe}")
+      loaded_recipes_hash.key?("#{cookbook}::#{recipe}")
     end
 
     #
@@ -468,7 +511,7 @@ ERROR_MESSAGE
     # @return [Boolean] `true` if the recipe has been loaded, `false` otherwise.
     #
     def loaded_fully_qualified_attribute?(cookbook, attribute_file)
-      loaded_attributes_hash.has_key?("#{cookbook}::#{attribute_file}")
+      loaded_attributes_hash.key?("#{cookbook}::#{attribute_file}")
     end
 
     #
@@ -579,6 +622,22 @@ ERROR_MESSAGE
       reboot_info.size > 0
     end
 
+    # Remote transport from Train
+    #
+    # @return [Train::Plugins::Transport] The child class for our train transport.
+    #
+    def transport
+      @transport ||= Chef::TrainTransport.new(logger).build_transport
+    end
+
+    # Remote connection object from Train
+    #
+    # @return [Train::Plugins::Transport::BaseConnection]
+    #
+    def transport_connection
+      @transport_connection ||= transport&.connection
+    end
+
     #
     # Create a child RunContext.
     #
@@ -603,12 +662,16 @@ ERROR_MESSAGE
     class ChildRunContext < RunContext
       extend Forwardable
       def_delegators :parent_run_context, *%w{
+        action_collection
+        action_collection=
         cancel_reboot
         config
         cookbook_collection
+        cookbook_collection=
         cookbook_compiler
         definitions
         events
+        events=
         has_cookbook_file_in_cookbook?
         has_template_in_cookbook?
         load
@@ -623,12 +686,19 @@ ERROR_MESSAGE
         loaded_recipes_hash
         logger
         node
+        node=
         open_stream
         reboot_info
         reboot_info=
         reboot_requested?
         request_reboot
         resolve_attribute
+        rest
+        rest=
+        rest_clean
+        rest_clean=
+        transport
+        transport_connection
         unreachable_cookbook?
       }
 
@@ -642,10 +712,10 @@ ERROR_MESSAGE
       end
 
       CHILD_STATE = %w{
-        audits
-        audits=
-        create_child
         add_delayed_action
+        before_notification_collection
+        before_notifications
+        create_child
         delayed_actions
         delayed_notification_collection
         delayed_notification_collection=
@@ -653,27 +723,28 @@ ERROR_MESSAGE
         immediate_notification_collection
         immediate_notification_collection=
         immediate_notifications
-        before_notification_collection
-        before_notifications
         include_recipe
         initialize_child_state
         load_recipe
         load_recipe_file
         notifies_before
-        notifies_immediately
         notifies_delayed
+        notifies_immediately
         parent_run_context
-        root_run_context
         resource_collection
         resource_collection=
+        reverse_immediate_notifications
+        root_run_context
         runner
         runner=
-      }.map { |x| x.to_sym }
+        unified_mode
+        updated_resources
+      }.map(&:to_sym)
 
       # Verify that we didn't miss any methods
       unless @__skip_method_checking # hook specifically for compat_resource
         missing_methods = superclass.instance_methods(false) - instance_methods(false) - CHILD_STATE
-        if !missing_methods.empty?
+        unless missing_methods.empty?
           raise "ERROR: not all methods of RunContext accounted for in ChildRunContext! All methods must be marked as child methods with CHILD_STATE or delegated to the parent_run_context. Missing #{missing_methods.join(", ")}."
         end
       end

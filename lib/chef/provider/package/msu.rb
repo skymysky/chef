@@ -1,6 +1,6 @@
 #
 # Author:: Nimisha Sharad (<nimisha.sharad@msystechnologies.com>)
-# Copyright:: Copyright 2015-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,13 +20,14 @@
 # The contents of msu file are extracted, which contains one or more cab files.
 # The extracted cab files are installed using Chef::Resource::Package::CabPackage
 # Reference: https://support.microsoft.com/en-in/kb/934307
-require "chef/provider/package"
-require "chef/resource/msu_package"
-require "chef/mixin/shell_out"
-require "chef/provider/package/cab"
-require "chef/util/path_helper"
-require "chef/mixin/uris"
-require "chef/mixin/checksum"
+require_relative "../package"
+require_relative "../../resource/msu_package"
+require_relative "../../mixin/shell_out"
+require_relative "cab"
+require_relative "../../util/path_helper"
+require_relative "../../mixin/uris"
+require_relative "../../mixin/checksum"
+require "cgi" unless defined?(CGI)
 
 class Chef
   class Provider
@@ -54,6 +55,7 @@ class Chef
           else
             current_resource.version(get_current_versions)
           end
+
           current_resource
         end
 
@@ -98,7 +100,7 @@ class Chef
 
         def default_download_cache_path
           uri = ::URI.parse(new_resource.source)
-          filename = ::File.basename(::URI.unescape(uri.path))
+          filename = ::File.basename(::CGI.unescape(uri.path))
           file_cache_dir = Chef::FileCache.create_cache_path("package/")
           Chef::Util::PathHelper.cleanpath("#{file_cache_dir}/#{filename}")
         end
@@ -108,6 +110,7 @@ class Chef
           @cab_files.each do |cab_file|
             declare_resource(:cab_package, new_resource.name) do
               source cab_file
+              timeout new_resource.timeout
               action :install
             end
           end
@@ -118,6 +121,7 @@ class Chef
           @cab_files.each do |cab_file|
             declare_resource(:cab_package, new_resource.name) do
               source cab_file
+              timeout new_resource.timeout
               action :remove
             end
           end
@@ -125,7 +129,7 @@ class Chef
 
         def extract_msu_contents(msu_file, destination)
           with_os_architecture(nil) do
-            shell_out_with_timeout!("#{ENV['SYSTEMROOT']}\\system32\\expand.exe -f:* #{msu_file} #{destination}")
+            shell_out!("#{ENV["SYSTEMROOT"]}\\system32\\expand.exe -f:* #{msu_file} #{destination}")
           end
         end
 
@@ -148,6 +152,7 @@ class Chef
 
             cab_files
           end
+
           cab_files
         end
 

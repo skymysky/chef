@@ -1,7 +1,6 @@
-# encoding: UTF-8
 #
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2013-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,9 +39,7 @@ module AptServer
   def tcp_test_port(hostname, port)
     tcp_socket = TCPSocket.new(hostname, port)
     true
-  rescue Errno::ETIMEDOUT
-    false
-  rescue Errno::ECONNREFUSED
+  rescue Errno::ETIMEDOUT, Errno::ECONNREFUSED
     false
   ensure
     tcp_socket && tcp_socket.close
@@ -50,11 +47,11 @@ module AptServer
 
   def apt_server
     @apt_server ||= WEBrick::HTTPServer.new(
-      :Port         => 9000,
-      :DocumentRoot => apt_data_dir + "/var/www/apt",
+      Port: 9000,
+      DocumentRoot: apt_data_dir + "/var/www/apt",
       # Make WEBrick quiet, comment out for debug.
-      :Logger       => Logger.new(StringIO.new),
-      :AccessLog    => [ StringIO.new, WEBrick::AccessLog::COMMON_LOG_FORMAT ]
+      Logger: Logger.new(StringIO.new),
+      AccessLog: [ StringIO.new, WEBrick::AccessLog::COMMON_LOG_FORMAT ]
     )
   end
 
@@ -86,10 +83,10 @@ module AptServer
   end
 end
 
-metadata = { :unix_only => true,
-             :requires_root => true,
-             :provider => { :package => Chef::Provider::Package::Apt },
-             :arch => "x86_64" # test packages are 64bit
+metadata = { unix_only: true,
+             requires_root: true,
+             provider: { package: Chef::Provider::Package::Apt },
+             arch: "x86_64", # test packages are 64bit
 }
 
 describe Chef::Resource::AptPackage, metadata do
@@ -169,13 +166,13 @@ describe Chef::Resource::AptPackage, metadata do
 
       it "does nothing for action :remove" do
         package_resource.run_action(:remove)
-        shell_out!("dpkg -l chef-integration-test", :returns => [1])
+        shell_out!("dpkg -l chef-integration-test", returns: [1])
         expect(package_resource).not_to be_updated_by_last_action
       end
 
       it "does nothing for action :purge" do
         package_resource.run_action(:purge)
-        shell_out!("dpkg -l chef-integration-test", :returns => [1])
+        shell_out!("dpkg -l chef-integration-test", returns: [1])
         expect(package_resource).not_to be_updated_by_last_action
       end
 
@@ -189,7 +186,7 @@ describe Chef::Resource::AptPackage, metadata do
         it "raises a reasonable error for action :install" do
           expect do
             package_resource.run_action(:install)
-          end.to raise_error(Mixlib::ShellOut::ShellCommandFailed)
+          end.to raise_error(Chef::Exceptions::Package)
         end
 
       end
@@ -275,7 +272,7 @@ describe Chef::Resource::AptPackage, metadata do
               r = base_resource
               r.cookbook_name = "preseed"
               r.response_file("preseed-template-variables.seed")
-              r.response_file_variables({ :template_variable => "SUPPORTS VARIABLES" })
+              r.response_file_variables({ template_variable: "SUPPORTS VARIABLES" })
               r
             end
 
@@ -300,13 +297,13 @@ describe Chef::Resource::AptPackage, metadata do
 
       it "does nothing for action :install" do
         package_resource.run_action(:install)
-        shell_out!("dpkg -l chef-integration-test", :returns => [0])
+        shell_out!("dpkg -l chef-integration-test", returns: [0])
         expect(package_resource).not_to be_updated_by_last_action
       end
 
       it "does nothing for action :upgrade" do
         package_resource.run_action(:upgrade)
-        shell_out!("dpkg -l chef-integration-test", :returns => [0])
+        shell_out!("dpkg -l chef-integration-test", returns: [0])
         expect(package_resource).not_to be_updated_by_last_action
       end
 
@@ -324,10 +321,10 @@ describe Chef::Resource::AptPackage, metadata do
       # un  chef-integration-test             <none>                                    (no description available)
       def pkg_should_be_removed
         # will raise if exit code != 0,1
-        pkg_check = shell_out!("dpkg -l chef-integration-test", :returns => [0, 1])
+        pkg_check = shell_out!("dpkg -l chef-integration-test", returns: [0, 1])
 
         if pkg_check.exitstatus == 0
-          expect(pkg_check.stdout).to match(/un[\s]+chef-integration-test/)
+          expect(pkg_check.stdout).to match(/un\s+chef-integration-test/)
         end
       end
 
@@ -353,14 +350,14 @@ describe Chef::Resource::AptPackage, metadata do
 
       it "does nothing for action :install" do
         package_resource.run_action(:install)
-        shell_out!("dpkg -l chef-integration-test", :returns => [0])
+        shell_out!("dpkg -l chef-integration-test", returns: [0])
         expect(package_resource).not_to be_updated_by_last_action
       end
 
       it "upgrades the package for action :upgrade" do
         package_resource.run_action(:upgrade)
-        dpkg_l = shell_out!("dpkg -l chef-integration-test", :returns => [0])
-        expect(dpkg_l.stdout).to match(/chef\-integration\-test[\s]+1\.1\-1/)
+        dpkg_l = shell_out!("dpkg -l chef-integration-test", returns: [0])
+        expect(dpkg_l.stdout).to match(/chef\-integration\-test\s+1\.1\-1/)
         expect(package_resource).to be_updated_by_last_action
       end
 
@@ -373,8 +370,8 @@ describe Chef::Resource::AptPackage, metadata do
 
         it "upgrades the package for action :install" do
           package_resource.run_action(:install)
-          dpkg_l = shell_out!("dpkg -l chef-integration-test", :returns => [0])
-          expect(dpkg_l.stdout).to match(/chef\-integration\-test[\s]+1\.1\-1/)
+          dpkg_l = shell_out!("dpkg -l chef-integration-test", returns: [0])
+          expect(dpkg_l.stdout).to match(/chef\-integration\-test\s+1\.1\-1/)
           expect(package_resource).to be_updated_by_last_action
         end
       end

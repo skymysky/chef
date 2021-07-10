@@ -1,7 +1,7 @@
 #
 # Author:: Nuo Yan <nuo@chef.io>
 # Author:: Seth Chisamore <schisamo@chef.io>
-# Copyright:: Copyright 2010-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,10 +18,13 @@
 #
 
 require "spec_helper"
-require "mixlib/shellout"
 
-describe Chef::Provider::Service::Windows, "load_current_resource", :windows_only do
+describe Chef::Provider::Service::Windows, "load_current_resource" do
   include_context "Win32"
+
+  before do
+    stub_const("Chef::ReservedNames::Win32::Security", Class.new) unless windows?
+  end
 
   let(:logger) { double("Mixlib::Log::Child").as_null_object }
 
@@ -42,8 +45,7 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
       tag_id: 0,
       dependencies: ["Winmgmt"],
       service_start_name: "LocalSystem",
-      display_name: "Chef Client Service"
-    )
+      display_name: "Chef Client Service")
   end
 
   # Actual response from Win32::Service.services
@@ -74,8 +76,7 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
       command: nil,
       num_actions: 0,
       actions: nil,
-      delayed_start: 1
-    )
+      delayed_start: 1)
   end
 
   let(:provider) do
@@ -97,37 +98,18 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
     Win32::Service::DEMAND_START = 0x00000003
     Win32::Service::DISABLED = 0x00000004
 
+    allow(Win32::Service).to receive(:start).with(any_args).and_return(Win32::Service)
     allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-      double("StatusStruct", :current_state => "running"))
+      double("StatusStruct", current_state: "running")
+    )
     allow(Win32::Service).to receive(:config_info).with(new_resource.service_name)
       .and_return(chef_service_config_info)
 
-    # Real response from Win32::Service.services
-    allow(Win32::Service).to receive(:services).and_return([
-      # Add chef_service_info to our stubbed response so our tests that are expecting the service to exist work
-      chef_service_info,
-      double("Struct::ServiceInfo", service_name: "ACPI", display_name: "Microsoft ACPI Driver", service_type: "kernel driver", current_state: "running", controls_accepted: ["stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: '\\SystemRoot\\System32\\drivers\\ACPI.sys', start_type: "boot start", error_control: "critical", load_order_group: "Core", tag_id: 2, start_name: "", dependencies: [], description: "", interactive: false, pid: 0, service_flags: 0, reset_period: 0, reboot_message: nil, command: nil, num_actions: 0, actions: nil, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "cdrom", display_name: "CD-ROM Driver", service_type: "kernel driver", current_state: "running", controls_accepted: ["stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: '\\SystemRoot\\System32\\drivers\\cdrom.sys', start_type: "system start", error_control: "normal", load_order_group: "SCSI CDROM Class", tag_id: 3, start_name: "", dependencies: [], description: "", interactive: false, pid: 0, service_flags: 0, reset_period: 0, reboot_message: nil, command: nil, num_actions: 0, actions: nil, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "CryptSvc", display_name: "Cryptographic Services", service_type: "share process", current_state: "running", controls_accepted: ["shutdown", "stop", "session change"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\system32\\svchost.exe -k NetworkService', start_type: "auto start", error_control: "normal", load_order_group: "", tag_id: 0, start_name: 'NT Authority\\NetworkService', dependencies: ["RpcSs"], description: "Provides three management services: Catalog Database Service, which confirms the signatures of Windows files and allows new programs to be installed; Protected Root Service, which adds and removes Trusted Root Certification Authority certificates from this computer; and Automatic Root Certificate Update Service, which retrieves root certificates from Windows Update and enable scenarios such as SSL. If this service is stopped, these management services will not function properly. If this service is disabled, any services that explicitly depend on it will fail to start.", interactive: false, pid: 932, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 60000 }, 2 => { action_type: "none", delay: 0 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "DcomLaunch", display_name: "DCOM Server Process Launcher", service_type: "share process", current_state: "running", controls_accepted: ["session change"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\system32\\svchost.exe -k DcomLaunch', start_type: "auto start", error_control: "normal", load_order_group: "COM Infrastructure", tag_id: 0, start_name: "LocalSystem", dependencies: [], description: "The DCOMLAUNCH service launches COM and DCOM servers in response to object activation requests. If this service is stopped or disabled, programs using COM or DCOM will not function properly. It is strongly recommended that you have the DCOMLAUNCH service running.", interactive: false, pid: 552, service_flags: 0, reset_period: 0, reboot_message: nil, command: nil, num_actions: 1, actions: { 1 => { action_type: "reboot", delay: 60000 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "Dfsc", display_name: "DFS Namespace Client Driver", service_type: "file system driver", current_state: "running", controls_accepted: ["stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'System32\\Drivers\\dfsc.sys', start_type: "system start", error_control: "normal", load_order_group: "Network", tag_id: 0, start_name: "", dependencies: ["Mup"], description: "Client driver for access to DFS Namespaces", interactive: false, pid: 0, service_flags: 0, reset_period: 0, reboot_message: nil, command: nil, num_actions: 0, actions: nil, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "Dhcp", display_name: "DHCP Client", service_type: "share process", current_state: "running", controls_accepted: %w{shutdown stop}, win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\system32\\svchost.exe -k LocalServiceNetworkRestricted', start_type: "auto start", error_control: "normal", load_order_group: "TDI", tag_id: 0, start_name: 'NT Authority\\LocalService', dependencies: %w{NSI Tdx Afd}, description: "Registers and updates IP addresses and DNS records for this computer. If this service is stopped, this computer will not receive dynamic IP addresses and DNS updates. If this service is disabled, any services that explicitly depend on it will fail to start.", interactive: false, pid: 780, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 120000 }, 2 => { action_type: "restart", delay: 300000 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "EventLog", display_name: "Windows Event Log", service_type: "share process", current_state: "running", controls_accepted: %w{shutdown stop}, win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\System32\\svchost.exe -k LocalServiceNetworkRestricted', start_type: "auto start", error_control: "normal", load_order_group: "Event Log", tag_id: 0, start_name: 'NT AUTHORITY\\LocalService', dependencies: [], description: "This service manages events and event logs. It supports logging events, querying events, subscribing to events, archiving event logs, and managing event metadata. It can display events in both XML and plain text format. Stopping this service may compromise security and reliability of the system.", interactive: false, pid: 780, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 60000 }, 2 => { action_type: "restart", delay: 120000 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "EventSystem", display_name: "COM+ Event System", service_type: "share process", current_state: "running", controls_accepted: ["stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\system32\\svchost.exe -k LocalService', start_type: "auto start", error_control: "normal", load_order_group: "", tag_id: 0, start_name: 'NT AUTHORITY\\LocalService', dependencies: ["rpcss"], description: "Supports System Event Notification Service (SENS), which provides automatic distribution of events to subscribing Component Object Model (COM) components. If the service is stopped, SENS will close and will not be able to provide logon and logoff notifications. If this service is disabled, any services that explicitly depend on it will fail to start.", interactive: false, pid: 844, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 1000 }, 2 => { action_type: "restart", delay: 5000 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "LanmanWorkstation", display_name: "Workstation", service_type: "share process", current_state: "running", controls_accepted: ["pause continue", "stop", "power event"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\System32\\svchost.exe -k NetworkService', start_type: "auto start", error_control: "normal", load_order_group: "NetworkProvider", tag_id: 0, start_name: 'NT AUTHORITY\\NetworkService', dependencies: %w{Bowser MRxSmb20 NSI}, description: "Creates and maintains client network connections to remote servers using the SMB protocol. If this service is stopped, these connections will be unavailable. If this service is disabled, any services that explicitly depend on it will fail to start.", interactive: false, pid: 932, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 60000 }, 2 => { action_type: "restart", delay: 120000 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "lmhosts", display_name: "TCP/IP NetBIOS Helper", service_type: "share process", current_state: "running", controls_accepted: ["stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\system32\\svchost.exe -k LocalServiceNetworkRestricted', start_type: "auto start", error_control: "normal", load_order_group: "TDI", tag_id: 0, start_name: 'NT AUTHORITY\\LocalService', dependencies: %w{NetBT Afd}, description: "Provides support for the NetBIOS over TCP/IP (NetBT) service and NetBIOS name resolution for clients on the network, therefore enabling users to share files, print, and log on to the network. If this service is stopped, these functions might be unavailable. If this service is disabled, any services that explicitly depend on it will fail to start.", interactive: false, pid: 780, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 100 }, 2 => { action_type: "restart", delay: 100 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "MpsSvc", display_name: "Windows Firewall", service_type: "share process", current_state: "running", controls_accepted: ["stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\system32\\svchost.exe -k LocalServiceNoNetwork', start_type: "auto start", error_control: "normal", load_order_group: "NetworkProvider", tag_id: 0, start_name: 'NT Authority\\LocalService', dependencies: %w{mpsdrv bfe}, description: "Windows Firewall helps protect your computer by preventing unauthorized users from gaining access to your computer through the Internet or a network.", interactive: false, pid: 340, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 120000 }, 2 => { action_type: "restart", delay: 300000 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "mrxsmb", display_name: "SMB MiniRedirector Wrapper and Engine", service_type: "file system driver", current_state: "running", controls_accepted: ["stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'system32\\DRIVERS\\mrxsmb.sys', start_type: "demand start", error_control: "normal", load_order_group: "Network", tag_id: 5, start_name: "", dependencies: ["rdbss"], description: "Implements the framework for the SMB filesystem redirector", interactive: false, pid: 0, service_flags: 0, reset_period: 0, reboot_message: nil, command: nil, num_actions: 0, actions: nil, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "Ntfs", display_name: "Ntfs", service_type: "file system driver", current_state: "running", controls_accepted: ["stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: "", start_type: "demand start", error_control: "normal", load_order_group: "Boot File System", tag_id: 0, start_name: "", dependencies: [], description: "", interactive: false, pid: 0, service_flags: 0, reset_period: 0, reboot_message: nil, command: nil, num_actions: 0, actions: nil, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "Tcpip", display_name: "TCP/IP Protocol Driver", service_type: "kernel driver", current_state: "running", controls_accepted: ["stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: '\\SystemRoot\\System32\\drivers\\tcpip.sys', start_type: "boot start", error_control: "normal", load_order_group: "PNP_TDI", tag_id: 3, start_name: "", dependencies: [], description: "TCP/IP Protocol Driver", interactive: false, pid: 0, service_flags: 0, reset_period: 0, reboot_message: nil, command: nil, num_actions: 0, actions: nil, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "W32Time", display_name: "Windows Time", service_type: "share process", current_state: "running", controls_accepted: ["netbind change", "param change", "shutdown", "stop", "hardware profile change", "power event"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\system32\\svchost.exe -k LocalService', start_type: "demand start", error_control: "normal", load_order_group: "", tag_id: 0, start_name: 'NT AUTHORITY\\LocalService', dependencies: [], description: "Maintains date and time synchronization on all clients and servers in the network. If this service is stopped, date and time synchronization will be unavailable. If this service is disabled, any services that explicitly depend on it will fail to start.", interactive: false, pid: 844, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 60000 }, 2 => { action_type: "restart", delay: 120000 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "Winmgmt", display_name: "Windows Management Instrumentation", service_type: "share process", current_state: "running", controls_accepted: ["pause continue", "shutdown", "stop"], win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\system32\\svchost.exe -k netsvcs', start_type: "auto start", error_control: "ignore", load_order_group: "", tag_id: 0, start_name: "localSystem", dependencies: ["RPCSS"], description: "Provides a common interface and object model to access management information about operating system, devices, applications and services. If this service is stopped, most Windows-based software will not function properly. If this service is disabled, any services that explicitly depend on it will fail to start.", interactive: false, pid: 812, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 120000 }, 2 => { action_type: "restart", delay: 300000 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-      double("Struct::ServiceInfo", service_name: "WinRM", display_name: "Windows Remote Management (WS-Management)", service_type: "share process", current_state: "running", controls_accepted: %w{shutdown stop}, win32_exit_code: 0, service_specific_exit_code: 0, check_point: 0, wait_hint: 0, binary_path_name: 'C:\\Windows\\System32\\svchost.exe -k NetworkService', start_type: "auto start", error_control: "normal", load_order_group: "", tag_id: 0, start_name: 'NT AUTHORITY\\NetworkService', dependencies: %w{RPCSS HTTP}, description: "Windows Remote Management (WinRM) service implements the WS-Management protocol for remote management. WS-Management is a standard web services protocol used for remote software and hardware management. The WinRM service listens on the network for WS-Management requests and processes them. The WinRM Service needs to be configured with a listener using winrm.cmd command line tool or through Group Policy in order for it to listen over the network. The WinRM service provides access to WMI data and enables event collection. Event collection and subscription to events require that the service is running. WinRM messages use HTTP and HTTPS as transports. The WinRM service does not depend on IIS but is preconfigured to share a port with IIS on the same machine.  The WinRM service reserves the /wsman URL prefix. To prevent conflicts with IIS, administrators should ensure that any websites hosted on IIS do not use the /wsman URL prefix.", interactive: false, pid: 932, service_flags: 0, reset_period: 86400, reboot_message: nil, command: nil, num_actions: 3, actions: { 1 => { action_type: "restart", delay: 120000 }, 2 => { action_type: "restart", delay: 300000 }, 3 => { action_type: "none", delay: 0 } }, delayed_start: 0),
-    ])
+    allow(Win32::Service).to receive(:delayed_start).with(chef_service_name).and_return(1)
     allow(Win32::Service).to receive(:exists?).and_return(true)
     allow(Win32::Service).to receive(:configure).and_return(Win32::Service)
     allow(Chef::ReservedNames::Win32::Security).to receive(:get_account_right).and_return([])
-    allow(Chef::ReservedNames::Win32::Security).to receive(:add_account_right).with("LocalSystem", "SeServiceLogonRight").and_return(0)
+    allow(Chef::ReservedNames::Win32::Security).to receive(:add_account_right).with("localsystem", "SeServiceLogonRight").and_return(0)
   end
 
   after(:each) do
@@ -176,8 +158,8 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
           tag_id: 0,
           dependencies: %w{NSI Tdx Afd},
           service_start_name: 'NT Authority\\LocalService',
-          display_name: "DHCP Client"
-        ))
+          display_name: "DHCP Client")
+      )
     end
 
     context "startup_type is neither :automatic or :disabled" do
@@ -192,8 +174,8 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
             tag_id: 0,
             dependencies: %w{NSI Tdx Afd},
             service_start_name: 'NT Authority\\LocalService',
-            display_name: "DHCP Client"
-          ))
+            display_name: "DHCP Client")
+        )
       end
 
       it "does not set the current resources enabled" do
@@ -249,13 +231,13 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
     end
 
     it "sets delayed start to true if delayed start is enabled" do
-      allow(chef_service_info).to receive(:delayed_start).and_return(1)
+      allow(Win32::Service).to receive(:delayed_start).with(chef_service_name).and_return(1)
       provider.load_current_resource
       expect(provider.current_resource.delayed_start).to be true
     end
 
     it "sets delayed start to false if delayed start is disabled" do
-      allow(chef_service_info).to receive(:delayed_start).and_return(0)
+      allow(Win32::Service).to receive(:delayed_start).with(chef_service_name).and_return(0)
       provider.load_current_resource
       expect(provider.current_resource.delayed_start).to be false
     end
@@ -272,7 +254,7 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
       end
 
       it "logs debug message" do
-        expect(logger).to receive(:trace).with("windows_service[#{chef_service_name}] already exists - nothing to do")
+        expect(logger).to receive(:debug).with("windows_service[#{chef_service_name}] already exists - nothing to do")
         provider.action_create
       end
 
@@ -315,7 +297,7 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
           start_type: 2,
           error_control: 1,
           binary_path_name: chef_service_binary_path_name,
-          service_start_name: "LocalSystem",
+          service_start_name: "localsystem",
           desired_access: 983551
         )
         provider.action_create
@@ -352,7 +334,7 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
       end
 
       it "logs debug message" do
-        expect(logger).to receive(:trace).with("windows_service[#{chef_service_name}] does not exist - nothing to do")
+        expect(logger).to receive(:debug).with("windows_service[#{chef_service_name}] does not exist - nothing to do")
         provider.action_delete
       end
 
@@ -375,26 +357,19 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
         allow(Win32::Service).to receive(:configure).with(anything).and_return(true)
       end
 
-      it "works around #6300 if run_as_user is default" do
-        new_resource.run_as_user = new_resource.class.properties[:run_as_user].default
-        expect(provider.new_resource).to receive(:run_as_user=)
-          .with(new_resource.class.properties[:run_as_user].default)
-        provider.action_configure
-      end
-
-      # Attributes that are Strings
+      # properties that are Strings
       %i{binary_path_name load_order_group dependencies run_as_user
          display_name description}.each do |attr|
-        it "configures service if #{attr} has changed" do
-          provider.current_resource.send("#{attr}=", "old value")
-          provider.new_resource.send("#{attr}=", "new value")
+           it "configures service if #{attr} has changed" do
+             provider.current_resource.send("#{attr}=", "old value")
+             provider.new_resource.send("#{attr}=", "new value")
 
-          expect(Win32::Service).to receive(:configure)
-          provider.action_configure
-        end
-      end
+             expect(Win32::Service).to receive(:configure)
+             provider.action_configure
+           end
+         end
 
-      # Attributes that are Integers
+      # properties that are Integers
       %i{service_type error_control}.each do |attr|
         it "configures service if #{attr} has changed" do
           provider.current_resource.send("#{attr}=", 1)
@@ -413,6 +388,18 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
         provider.action_configure
       end
 
+      it "does not configure service when run_as_user case is different" do
+        provider.current_resource.run_as_user = "JohnDoe"
+        provider.new_resource.run_as_user = "johndoe"
+        expect(Win32::Service).not_to receive(:configure)
+        provider.action_configure
+
+        provider.current_resource.run_as_user = "johndoe"
+        provider.new_resource.run_as_user = "JohnDoe"
+        expect(Win32::Service).not_to receive(:configure)
+        provider.action_configure
+      end
+
       it "calls converge_delayed_start" do
         expect(provider).to receive(:converge_delayed_start)
         provider.action_configure
@@ -420,13 +407,18 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
     end
 
     context "service does not exist" do
+      let(:missing_service_warning_message) { "windows_service[#{chef_service_name}] does not exist. Maybe you need to prepend action :create" }
+
       before do
         allow(Win32::Service).to receive(:exists?).with(chef_service_name).and_return(false)
+
+        # This prevents warnings being logged during unit tests which adds to
+        # developer confusion when they aren't familiar with this specific test
+        allow(logger).to receive(:warn).with(missing_service_warning_message)
       end
 
       it "logs warning" do
-        expect(logger).to receive(:warn)
-          .with("windows_service[#{chef_service_name}] does not exist. Maybe you need to prepend action :create")
+        expect(logger).to receive(:warn).with(missing_service_warning_message)
         provider.action_configure
       end
 
@@ -435,7 +427,7 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
         expect(provider.resource_updated?).to be false
       end
 
-      it "does not convigure service" do
+      it "does not configure service" do
         expect(Win32::Service).to_not receive(:configure)
         provider.action_configure
       end
@@ -450,13 +442,6 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
   describe Chef::Provider::Service::Windows, "converge_delayed_start" do
     before do
       allow(Win32::Service).to receive(:configure).and_return(true)
-    end
-
-    it "works around #6300 if delayed_start is default" do
-      new_resource.delayed_start = new_resource.class.properties[:delayed_start].default
-      expect(provider.new_resource).to receive(:delayed_start=)
-        .with(new_resource.class.properties[:delayed_start].default)
-      provider.send(:converge_delayed_start)
     end
 
     context "delayed start needs to be updated" do
@@ -502,66 +487,171 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
   describe Chef::Provider::Service::Windows, "start_service" do
     before(:each) do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "stopped"),
-        double("StatusStruct", :current_state => "running"))
+        double("StatusStruct", current_state: "stopped"),
+        double("StatusStruct", current_state: "running")
+      )
     end
 
-    it "calls the start command if one is specified" do
-      new_resource.start_command "sc start #{chef_service_name}"
-      expect(provider).to receive(:shell_out!).with("#{new_resource.start_command}").and_return("Starting custom service")
-      provider.start_service
-      expect(new_resource.updated_by_last_action?).to be_truthy
+    context "run_as_user user is specified" do
+      let(:run_as_user) { provider.new_resource.class.properties[:run_as_user].default }
+
+      before do
+        provider.new_resource.run_as_user run_as_user
+      end
+
+      it "configures service run_as_user and run_as_password" do
+        expect(provider).to receive(:configure_service_run_as_properties).and_call_original
+        expect(Win32::Service).to receive(:configure)
+        provider.start_service
+      end
     end
 
-    it "uses the built-in command if no start command is specified" do
-      expect(Win32::Service).to receive(:start).with(new_resource.service_name)
-      provider.start_service
-      expect(new_resource.updated_by_last_action?).to be_truthy
+    context "run_as_user user is not specified" do
+      before do
+        expect(provider.new_resource.property_is_set?(:run_as_user)).to be false
+      end
+
+      it "does not configure service run_as_user and run_as_password" do
+        expect(Win32::Service).not_to receive(:configure)
+        provider.start_service
+      end
+    end
+
+    context "start_command is specified" do
+      let(:start_command) { "sc start #{chef_service_name}" }
+
+      before do
+        new_resource.start_command start_command
+        allow(provider).to receive(:shell_out!).with(start_command)
+      end
+
+      it "shells out the start_command" do
+        expect(provider).to receive(:shell_out!).with(start_command)
+        provider.start_service
+      end
+
+      it "does not call Win32::Service.start" do
+        expect(Win32::Service).not_to receive(:start)
+        provider.start_service
+      end
+
+      it "is updated by last action" do
+        provider.start_service
+        expect(new_resource).to be_updated_by_last_action
+      end
+    end
+
+    context "start_command is not specified" do
+      before do
+        expect(new_resource.start_command).to be_nil
+      end
+
+      it "uses the built-in command" do
+        expect(Win32::Service).to receive(:start).with(new_resource.service_name)
+        provider.start_service
+      end
+
+      it "does not shell out the start_command" do
+        expect(provider).not_to receive(:shell_out!)
+        provider.start_service
+      end
+
+      it "is updated by last action" do
+        provider.start_service
+        expect(new_resource).to be_updated_by_last_action
+      end
     end
 
     it "does nothing if the service does not exist" do
       allow(Win32::Service).to receive(:exists?).with(new_resource.service_name).and_return(false)
-      expect(Win32::Service).not_to receive(:start).with(new_resource.service_name)
+      expect(Win32::Service).not_to receive(:start)
       provider.start_service
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).not_to be_updated_by_last_action
     end
 
     it "does nothing if the service is running" do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "running"))
+        double("StatusStruct", current_state: "running")
+      )
       provider.load_current_resource
       expect(Win32::Service).not_to receive(:start).with(new_resource.service_name)
       provider.start_service
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).not_to be_updated_by_last_action
     end
 
-    it "raises an error if the service is paused" do
-      allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "paused"))
-      provider.load_current_resource
-      expect(Win32::Service).not_to receive(:start).with(new_resource.service_name)
-      expect { provider.start_service }.to raise_error( Chef::Exceptions::Service )
-      expect(new_resource.updated_by_last_action?).to be_falsey
+    context "service is paused" do
+      before do
+        allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
+          double("StatusStruct", current_state: "paused")
+        )
+        provider.load_current_resource
+      end
+
+      it "raises error" do
+        expect { provider.start_service }.to raise_error(Chef::Exceptions::Service)
+      end
+
+      it "does not start service" do
+        expect(Win32::Service).not_to receive(:start)
+        expect(provider).not_to receive(:shell_out!)
+        expect { provider.start_service }.to raise_error(Chef::Exceptions::Service)
+      end
+
+      it "is not updated by last action" do
+        expect { provider.start_service }.to raise_error(Chef::Exceptions::Service)
+        expect(new_resource).not_to be_updated_by_last_action
+      end
     end
 
-    it "waits and continues if the service is in start_pending" do
-      allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "start pending"),
-        double("StatusStruct", :current_state => "start pending"),
-        double("StatusStruct", :current_state => "running"))
-      provider.load_current_resource
-      expect(Win32::Service).not_to receive(:start).with(new_resource.service_name)
-      provider.start_service
-      expect(new_resource.updated_by_last_action?).to be_falsey
+    context "service is in start_pending" do
+      before do
+        allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
+          double("StatusStruct", current_state: "start pending"),
+          double("StatusStruct", current_state: "start pending"),
+          double("StatusStruct", current_state: "running")
+        )
+        provider.load_current_resource
+      end
+
+      it "waits until service is running" do
+        expect(provider).to receive(:wait_for_state).with(Chef::Provider::Service::Windows::RUNNING)
+        provider.start_service
+      end
+
+      it "does not start service" do
+        expect(Win32::Service).not_to receive(:start)
+        expect(provider).not_to receive(:shell_out!)
+        provider.start_service
+      end
+
+      it "is not updated by last action" do
+        provider.start_service
+        expect(new_resource).not_to be_updated_by_last_action
+      end
     end
 
-    it "fails if the service is in stop_pending" do
-      allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "stop pending"))
-      provider.load_current_resource
-      expect(Win32::Service).not_to receive(:start).with(new_resource.service_name)
-      expect { provider.start_service }.to raise_error( Chef::Exceptions::Service )
-      expect(new_resource.updated_by_last_action?).to be_falsey
+    context "service is in stop_pending" do
+      before do
+        allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
+          double("StatusStruct", current_state: "stop pending")
+        )
+        provider.load_current_resource
+      end
+
+      it "raises error" do
+        expect { provider.start_service }.to raise_error(Chef::Exceptions::Service)
+      end
+
+      it "does not start service" do
+        expect(Win32::Service).not_to receive(:start)
+        expect(provider).not_to receive(:shell_out!)
+        expect { provider.start_service }.to raise_error(Chef::Exceptions::Service)
+      end
+
+      it "is not updated by last action" do
+        expect { provider.start_service }.to raise_error(Chef::Exceptions::Service)
+        expect(new_resource).not_to be_updated_by_last_action
+      end
     end
 
     describe "running as a different account" do
@@ -570,14 +660,12 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
         new_resource.run_as_password("Wensleydale")
       end
 
-      it "calls #grant_service_logon if the :run_as_user and :run_as_password attributes are present" do
-        expect(Win32::Service).to receive(:start)
+      it "calls #grant_service_logon if the :run_as_user and :run_as_password properties are present" do
         expect(provider).to receive(:grant_service_logon).and_return(true)
         provider.start_service
       end
 
       it "does not grant user SeServiceLogonRight if it already has it" do
-        expect(Win32::Service).to receive(:start)
         expect(Chef::ReservedNames::Win32::Security).to receive(:get_account_right).with("wallace").and_return([service_right])
         expect(Chef::ReservedNames::Win32::Security).not_to receive(:add_account_right).with("wallace", service_right)
         provider.start_service
@@ -585,7 +673,6 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
 
       it "skips the rights check for LocalSystem" do
         new_resource.run_as_user("LocalSystem")
-        expect(Win32::Service).to receive(:start)
         expect(Chef::ReservedNames::Win32::Security).not_to receive(:get_account_right)
         expect(Chef::ReservedNames::Win32::Security).not_to receive(:add_account_right)
         provider.start_service
@@ -597,77 +684,83 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
 
     before(:each) do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "running"),
-        double("StatusStruct", :current_state => "stopped"))
+        double("StatusStruct", current_state: "running"),
+        double("StatusStruct", current_state: "stopped")
+      )
     end
 
     it "calls the stop command if one is specified" do
       new_resource.stop_command "sc stop #{chef_service_name}"
-      expect(provider).to receive(:shell_out!).with("#{new_resource.stop_command}").and_return("Stopping custom service")
+      expect(provider).to receive(:shell_out!).with((new_resource.stop_command).to_s).and_return("Stopping custom service")
       provider.stop_service
-      expect(new_resource.updated_by_last_action?).to be_truthy
+      expect(new_resource).to be_updated_by_last_action
     end
 
     it "uses the built-in command if no stop command is specified" do
       expect(Win32::Service).to receive(:stop).with(new_resource.service_name)
       provider.stop_service
-      expect(new_resource.updated_by_last_action?).to be_truthy
+      expect(new_resource).to be_updated_by_last_action
     end
 
     it "does nothing if the service does not exist" do
       allow(Win32::Service).to receive(:exists?).with(new_resource.service_name).and_return(false)
       expect(Win32::Service).not_to receive(:stop).with(new_resource.service_name)
       provider.stop_service
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).to_not be_updated_by_last_action
     end
 
     it "does nothing if the service is stopped" do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "stopped"))
+        double("StatusStruct", current_state: "stopped")
+      )
       provider.load_current_resource
       expect(Win32::Service).not_to receive(:stop).with(new_resource.service_name)
       provider.stop_service
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).to_not be_updated_by_last_action
     end
 
     it "raises an error if the service is paused" do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "paused"))
+        double("StatusStruct", current_state: "paused")
+      )
       provider.load_current_resource
       expect(Win32::Service).not_to receive(:start).with(new_resource.service_name)
       expect { provider.stop_service }.to raise_error( Chef::Exceptions::Service )
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).to_not be_updated_by_last_action
     end
 
     it "waits and continue if the service is in stop_pending" do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "stop pending"),
-        double("StatusStruct", :current_state => "stop pending"),
-        double("StatusStruct", :current_state => "stopped"))
+        double("StatusStruct", current_state: "stop pending"),
+        double("StatusStruct", current_state: "stop pending"),
+        double("StatusStruct", current_state: "stopped")
+      )
       provider.load_current_resource
       expect(Win32::Service).not_to receive(:stop).with(new_resource.service_name)
       provider.stop_service
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).to_not be_updated_by_last_action
     end
 
     it "fails if the service is in start_pending" do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "start pending"))
+        double("StatusStruct", current_state: "start pending")
+      )
       provider.load_current_resource
       expect(Win32::Service).not_to receive(:stop).with(new_resource.service_name)
       expect { provider.stop_service }.to raise_error( Chef::Exceptions::Service )
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).to_not be_updated_by_last_action
     end
 
     it "passes custom timeout to the stop command if provided" do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "running"))
+        double("StatusStruct", current_state: "running")
+      )
       new_resource.timeout 1
       expect(Win32::Service).to receive(:stop).with(new_resource.service_name)
       Timeout.timeout(2) do
         expect { provider.stop_service }.to raise_error(Timeout::Error)
       end
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).to_not be_updated_by_last_action
     end
 
   end
@@ -676,31 +769,33 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
 
     it "calls the restart command if one is specified" do
       new_resource.restart_command "sc restart"
-      expect(provider).to receive(:shell_out!).with("#{new_resource.restart_command}")
+      expect(provider).to receive(:shell_out!).with((new_resource.restart_command).to_s)
       provider.restart_service
-      expect(new_resource.updated_by_last_action?).to be_truthy
+      expect(new_resource).to be_updated_by_last_action
     end
 
     it "stops then starts the service if it is running" do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "running"),
-        double("StatusStruct", :current_state => "stopped"),
-        double("StatusStruct", :current_state => "stopped"),
-        double("StatusStruct", :current_state => "running"))
+        double("StatusStruct", current_state: "running"),
+        double("StatusStruct", current_state: "stopped"),
+        double("StatusStruct", current_state: "stopped"),
+        double("StatusStruct", current_state: "running")
+      )
       expect(Win32::Service).to receive(:stop).with(new_resource.service_name)
       expect(Win32::Service).to receive(:start).with(new_resource.service_name)
       provider.restart_service
-      expect(new_resource.updated_by_last_action?).to be_truthy
+      expect(new_resource).to be_updated_by_last_action
     end
 
     it "just starts the service if it is stopped" do
       allow(Win32::Service).to receive(:status).with(new_resource.service_name).and_return(
-        double("StatusStruct", :current_state => "stopped"),
-        double("StatusStruct", :current_state => "stopped"),
-        double("StatusStruct", :current_state => "running"))
+        double("StatusStruct", current_state: "stopped"),
+        double("StatusStruct", current_state: "stopped"),
+        double("StatusStruct", current_state: "running")
+      )
       expect(Win32::Service).to receive(:start).with(new_resource.service_name)
       provider.restart_service
-      expect(new_resource.updated_by_last_action?).to be_truthy
+      expect(new_resource).to be_updated_by_last_action
     end
 
     it "does nothing if the service does not exist" do
@@ -708,7 +803,7 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
       expect(Win32::Service).not_to receive(:stop).with(new_resource.service_name)
       expect(Win32::Service).not_to receive(:start).with(new_resource.service_name)
       provider.restart_service
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).to_not be_updated_by_last_action
     end
 
   end
@@ -716,34 +811,37 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
   describe Chef::Provider::Service::Windows, "enable_service" do
     before(:each) do
       allow(Win32::Service).to receive(:config_info).with(new_resource.service_name).and_return(
-        double("ConfigStruct", :start_type => "disabled"))
+        double("ConfigStruct", start_type: "disabled")
+      )
     end
 
     it "enables service" do
-      expect(Win32::Service).to receive(:configure).with(:service_name => new_resource.service_name, :start_type => Win32::Service::AUTO_START)
+      expect(Win32::Service).to receive(:configure).with(service_name: new_resource.service_name, start_type: Win32::Service::AUTO_START)
       provider.enable_service
-      expect(new_resource.updated_by_last_action?).to be_truthy
+      expect(new_resource).to be_updated_by_last_action
     end
 
     it "does nothing if the service does not exist" do
       allow(Win32::Service).to receive(:exists?).with(new_resource.service_name).and_return(false)
       expect(Win32::Service).not_to receive(:configure)
       provider.enable_service
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).to_not be_updated_by_last_action
     end
   end
 
   describe Chef::Provider::Service::Windows, "action_enable" do
     it "does nothing if the service is enabled" do
       allow(Win32::Service).to receive(:config_info).with(new_resource.service_name).and_return(
-        double("ConfigStruct", :start_type => "auto start"))
+        double("ConfigStruct", start_type: "auto start")
+      )
       expect(provider).not_to receive(:enable_service)
       provider.action_enable
     end
 
     it "enables the service if it is not set to automatic start" do
       allow(Win32::Service).to receive(:config_info).with(new_resource.service_name).and_return(
-        double("ConfigStruct", :start_type => "disabled"))
+        double("ConfigStruct", start_type: "disabled")
+      )
       expect(provider).to receive(:enable_service)
       provider.action_enable
     end
@@ -752,14 +850,16 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
   describe Chef::Provider::Service::Windows, "action_disable" do
     it "does nothing if the service is disabled" do
       allow(Win32::Service).to receive(:config_info).with(new_resource.service_name).and_return(
-        double("ConfigStruct", :start_type => "disabled"))
+        double("ConfigStruct", start_type: "disabled")
+      )
       expect(provider).not_to receive(:disable_service)
       provider.action_disable
     end
 
     it "disables the service if it is not set to disabled" do
       allow(Win32::Service).to receive(:config_info).with(new_resource.service_name).and_return(
-        double("ConfigStruct", :start_type => "auto start"))
+        double("ConfigStruct", start_type: "auto start")
+      )
       expect(provider).to receive(:disable_service)
       provider.action_disable
     end
@@ -768,20 +868,21 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
   describe Chef::Provider::Service::Windows, "disable_service" do
     before(:each) do
       allow(Win32::Service).to receive(:config_info).with(new_resource.service_name).and_return(
-        double("ConfigStruct", :start_type => "auto start"))
+        double("ConfigStruct", start_type: "auto start")
+      )
     end
 
     it "disables service" do
       expect(Win32::Service).to receive(:configure)
       provider.disable_service
-      expect(new_resource.updated_by_last_action?).to be_truthy
+      expect(new_resource).to be_updated_by_last_action
     end
 
     it "does nothing if the service does not exist" do
       allow(Win32::Service).to receive(:exists?).with(new_resource.service_name).and_return(false)
       expect(Win32::Service).not_to receive(:configure)
       provider.disable_service
-      expect(new_resource.updated_by_last_action?).to be_falsey
+      expect(new_resource).to_not be_updated_by_last_action
     end
   end
 
@@ -801,21 +902,26 @@ describe Chef::Provider::Service::Windows, "load_current_resource", :windows_onl
         provider.action_configure_startup
       end
     end
+
+    it "calls converge_delayed_start" do
+      expect(provider).to receive(:converge_delayed_start)
+      provider.action_configure_startup
+    end
   end
 
   describe Chef::Provider::Service::Windows, "set_start_type" do
     it "when called with :automatic it calls Win32::Service#configure with Win32::Service::AUTO_START" do
-      expect(Win32::Service).to receive(:configure).with(:service_name => new_resource.service_name, :start_type => Win32::Service::AUTO_START)
+      expect(Win32::Service).to receive(:configure).with(service_name: new_resource.service_name, start_type: Win32::Service::AUTO_START)
       provider.send(:set_startup_type, :automatic)
     end
 
     it "when called with :manual it calls Win32::Service#configure with Win32::Service::DEMAND_START" do
-      expect(Win32::Service).to receive(:configure).with(:service_name => new_resource.service_name, :start_type => Win32::Service::DEMAND_START)
+      expect(Win32::Service).to receive(:configure).with(service_name: new_resource.service_name, start_type: Win32::Service::DEMAND_START)
       provider.send(:set_startup_type, :manual)
     end
 
     it "when called with :disabled it calls Win32::Service#configure with Win32::Service::DISABLED" do
-      expect(Win32::Service).to receive(:configure).with(:service_name => new_resource.service_name, :start_type => Win32::Service::DISABLED)
+      expect(Win32::Service).to receive(:configure).with(service_name: new_resource.service_name, start_type: Win32::Service::DISABLED)
       provider.send(:set_startup_type, :disabled)
     end
 

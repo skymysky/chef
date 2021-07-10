@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2011-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,11 +88,13 @@ describe Chef::Mixin::Which do
 
       test_which("passes in the filename as the arg", "foo1", finds: "/dir1/foo1") do |f|
         raise "bad arg to block" unless f == "/dir1/foo1"
+
         true
       end
 
       test_which("arrays with blocks", "foo1", "foo2", finds: "/dir2/foo1", others: [ "/dir1/foo2" ]) do |f|
-        raise "bad arg to block" unless f == "/dir2/foo1" || f == "/dir1/foo2"
+        raise "bad arg to block" unless ["/dir2/foo1", "/dir1/foo2"].include?(f)
+
         true
       end
     end
@@ -155,6 +157,14 @@ describe Chef::Mixin::Which do
       test_where("does not finds foo1 and foo2 if they exist and the block is false", "foo1", "foo2", others: [ "/dir1/foo2", "/dir2/foo2" ]) do
         false
       end
+    end
+  end
+
+  describe "useful non-stubbed tests" do
+    it "works even when the PATH is nuked via adding default_paths", unix_only: true do
+      old_path = ENV["PATH"]
+      expect(test.which("ls")).to be_truthy
+      ENV["PATH"] = old_path
     end
   end
 end

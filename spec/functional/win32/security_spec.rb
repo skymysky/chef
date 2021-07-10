@@ -1,6 +1,6 @@
 #
 # Author:: Serdar Sutay (<serdar@chef.io>)
-# Copyright:: Copyright 2012-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,7 +19,7 @@
 require "spec_helper"
 require "mixlib/shellout"
 require "chef/mixin/user_context"
-if Chef::Platform.windows?
+if ChefUtils.windows?
   require "chef/win32/security"
 end
 
@@ -34,10 +34,7 @@ describe "Chef::Win32::Security", :windows_only do
     let(:password) { "Security@123" }
 
     let(:domain) do
-      whoami = Mixlib::ShellOut.new("whoami")
-      whoami.run_command
-      whoami.error!
-      whoami.stdout.split("\\")[0]
+      ENV["COMPUTERNAME"]
     end
 
     before do
@@ -64,7 +61,8 @@ describe "Chef::Win32::Security", :windows_only do
   describe "get_file_security" do
     it "should return a security descriptor when called with a path that exists" do
       security_descriptor = Chef::ReservedNames::Win32::Security.get_file_security(
-        "C:\\Program Files")
+        "C:\\Program Files"
+      )
       # Make sure the security descriptor works
       expect(security_descriptor.dacl_present?).to be true
     end
@@ -73,7 +71,8 @@ describe "Chef::Win32::Security", :windows_only do
   describe "access_check" do
     let(:security_descriptor) do
       Chef::ReservedNames::Win32::Security.get_file_security(
-        "C:\\Program Files")
+        "C:\\Program Files"
+      )
     end
 
     let(:token_rights) { Chef::ReservedNames::Win32::Security::TOKEN_ALL_ACCESS }
@@ -81,7 +80,8 @@ describe "Chef::Win32::Security", :windows_only do
     let(:token) do
       Chef::ReservedNames::Win32::Security.open_process_token(
         Chef::ReservedNames::Win32::Process.get_current_process,
-        token_rights).duplicate_token(:SecurityImpersonation)
+        token_rights
+      ).duplicate_token(:SecurityImpersonation)
     end
 
     let(:mapping) do
@@ -97,7 +97,7 @@ describe "Chef::Win32::Security", :windows_only do
 
     it "should check if the provided token has the desired access" do
       expect(Chef::ReservedNames::Win32::Security.access_check(security_descriptor,
-                     token, desired_access, mapping)).to be true
+        token, desired_access, mapping)).to be true
     end
   end
 
@@ -105,7 +105,8 @@ describe "Chef::Win32::Security", :windows_only do
     let(:token) do
       Chef::ReservedNames::Win32::Security.open_process_token(
         Chef::ReservedNames::Win32::Process.get_current_process,
-        token_rights)
+        token_rights
+      )
     end
     context "with all rights" do
       let(:token_rights) { Chef::ReservedNames::Win32::Security::TOKEN_ALL_ACCESS }
@@ -130,11 +131,12 @@ describe "Chef::Win32::Security", :windows_only do
     let(:token) do
       Chef::ReservedNames::Win32::Security.open_process_token(
         Chef::ReservedNames::Win32::Process.get_current_process,
-        token_rights)
+        token_rights
+      )
     end
 
     context "when the token is valid" do
-      let(:token_elevation_type) { [:TokenElevationTypeDefault, :TokenElevationTypeFull, :TokenElevationTypeLimited] }
+      let(:token_elevation_type) { %i{TokenElevationTypeDefault TokenElevationTypeFull TokenElevationTypeLimited} }
 
       it "returns the token elevation type" do
         elevation_type = Chef::ReservedNames::Win32::Security.get_token_information_elevation_type(token)
@@ -172,6 +174,49 @@ describe "Chef::Win32::Security", :windows_only do
 
       it "raises an exception" do
         expect { Chef::ReservedNames::Win32::Security.get_account_right(username) }.to raise_error(Chef::Exceptions::Win32APIError)
+      end
+    end
+  end
+
+  describe ".remove_account_right" do
+    let(:username) { ENV["USERNAME"] }
+
+    context "when given a valid username" do
+      it "removes the account right constants" do
+        Chef::ReservedNames::Win32::Security.add_account_right(username, "SeBatchLogonRight")
+        expect(Chef::ReservedNames::Win32::Security.get_account_right(username)).to include("SeBatchLogonRight")
+        Chef::ReservedNames::Win32::Security.remove_account_right(username, "SeBatchLogonRight")
+        expect(Chef::ReservedNames::Win32::Security.get_account_right(username)).not_to include("SeBatchLogonRight")
+      end
+    end
+
+    context "when given an invalid username" do
+      let(:username) { "noooooooooope" }
+
+      it "raises an exception" do
+        expect { Chef::ReservedNames::Win32::Security.remove_account_right(username, "SeBatchLogonRight") }.to raise_error(Chef::Exceptions::Win32APIError)
+      end
+    end
+  end
+
+  describe ".get_account_with_user_rights" do
+    let(:domain) { ENV["COMPUTERNAME"] }
+    let(:username) { ENV["USERNAME"] }
+
+    context "when given a valid user right" do
+      it "gets all accounts associated with given user right" do
+        Chef::ReservedNames::Win32::Security.add_account_right(username, "SeBatchLogonRight")
+        expect(Chef::ReservedNames::Win32::Security.get_account_with_user_rights("SeBatchLogonRight").flatten).to include("#{domain}\\#{username}")
+        Chef::ReservedNames::Win32::Security.remove_account_right(username, "SeBatchLogonRight")
+        expect(Chef::ReservedNames::Win32::Security.get_account_with_user_rights("SeBatchLogonRight").flatten).not_to include("#{domain}\\#{username}")
+      end
+    end
+
+    context "when given an invalid user right" do
+      let(:user_right) { "SeTest" }
+
+      it "returns empty array" do
+        expect(Chef::ReservedNames::Win32::Security.get_account_with_user_rights(user_right)).to be_empty
       end
     end
   end

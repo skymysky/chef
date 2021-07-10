@@ -1,6 +1,6 @@
 #
 # Author:: Aliasgar Batterywala (aliasgar.batterywala@msystechnologies.com)
-# Copyright:: Copyright 2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,7 +17,7 @@
 #
 
 require "spec_helper"
-if Chef::Platform.windows?
+if ChefUtils.windows?
   require "chef/win32/error"
   require "chef/win32/security"
   require "chef/win32/api/error"
@@ -81,9 +81,10 @@ describe "Chef::Win32::Security", :windows_only do
 
     context "when the user has admin privileges" do
       it "returns true" do
-        allow(Chef::ReservedNames::Win32::Security).to receive(:open_current_process_token)
-        token = Chef::ReservedNames::Win32::Security.open_current_process_token
+        token = double(:process_token)
         allow(token).to receive_message_chain(:handle, :handle)
+
+        allow(Chef::ReservedNames::Win32::Security).to receive(:open_current_process_token).and_return(token)
         allow(Chef::ReservedNames::Win32::Security).to receive(:get_token_information_elevation_type)
         allow(Chef::ReservedNames::Win32::Security).to receive(:GetTokenInformation).and_return(true)
         allow_any_instance_of(FFI::Buffer).to receive(:read_ulong).and_return(1)
@@ -98,12 +99,38 @@ describe "Chef::Win32::Security", :windows_only do
     let(:token) do
       Chef::ReservedNames::Win32::Security.open_process_token(
         Chef::ReservedNames::Win32::Process.get_current_process,
-        token_rights)
+        token_rights
+      )
     end
 
     it "raises error if GetTokenInformation fails" do
       allow(Chef::ReservedNames::Win32::Security).to receive(:GetTokenInformation).and_return(false)
       expect { Chef::ReservedNames::Win32::Security.get_token_information_elevation_type(token) }.to raise_error(Chef::Exceptions::Win32APIError)
+    end
+  end
+
+  describe "self.lookup_account_name" do
+    let(:security_class) { Chef::ReservedNames::Win32::Security }
+
+    context "when FFI::LastError.error result is ERROR_INSUFFICIENT_BUFFER" do
+      it "does not raise the exception" do
+        expect(FFI::LastError).to receive(:error).and_return(122)
+        expect { security_class.lookup_account_name "system" }.to_not raise_error
+      end
+    end
+
+    context "when operation completed successfully and FFI::LastError.error result is NO_ERROR" do
+      it "does not raise the exception" do
+        expect(FFI::LastError).to receive(:error).and_return(0)
+        expect { security_class.lookup_account_name "system" }.to_not raise_error
+      end
+    end
+
+    context "when FFI::LastError.error result is not ERROR_INSUFFICIENT_BUFFER and not NO_ERROR" do
+      it "raises Chef::ReservedNames::Win32::Error.raise! exception" do
+        expect(FFI::LastError).to receive(:error).and_return(123).at_least(:once)
+        expect { security_class.lookup_account_name "system" }.to raise_error(Chef::Exceptions::Win32APIError)
+      end
     end
   end
 end

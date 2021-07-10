@@ -1,6 +1,6 @@
 #
 # Author:: Jeremy Miller (<jm@chef.io>)
-# Copyright:: Copyright 2014-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +25,7 @@ describe Chef::ChefFS::DataHandler::DataHandlerBase do
       { "name" => "grizzly",
         "gender" => "female",
         "age" => 3,
-        "food" => "honey"
+        "food" => "honey",
       }
     end
 
@@ -33,7 +33,7 @@ describe Chef::ChefFS::DataHandler::DataHandlerBase do
       { "family" => "ursidae",
         "hibernate" => true,
         "food" => "berries",
-        "avg_lifespan_years" => 22
+        "avg_lifespan_years" => 22,
       }
     end
 
@@ -44,7 +44,7 @@ describe Chef::ChefFS::DataHandler::DataHandlerBase do
         "hibernate" => true,
         "avg_lifespan_years" => 22,
         "age" => 3,
-        "food" => "honey"
+        "food" => "honey",
       }
     end
 

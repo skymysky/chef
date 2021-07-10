@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2017-2017, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,7 +43,7 @@ describe Chef::HTTP::APIVersions do
   end
 
   let(:response) do
-    m = double("HttpResponse", :body => response_body)
+    m = double("HttpResponse", body: response_body)
     allow(m).to receive(:key?).with("x-ops-server-api-version").and_return(true)
     allow(m).to receive(:code).and_return(return_value)
     allow(m).to receive(:[]) do |key|
@@ -53,8 +53,26 @@ describe Chef::HTTP::APIVersions do
     m
   end
 
+  let(:version_class) do
+    Class.new do
+      extend Chef::Mixin::VersionedAPIFactory
+
+      version_class_v0 = Class.new do
+        extend Chef::Mixin::VersionedAPI
+        minimum_api_version 0
+      end
+      add_versioned_api_class version_class_v0
+
+      version_class_v2 = Class.new do
+        extend Chef::Mixin::VersionedAPI
+        minimum_api_version 2
+      end
+      add_versioned_api_class version_class_v2
+    end
+  end
+
   let(:client) do
-    TestVersionClient.new(url, { version_class: VersionedClassVersions })
+    TestVersionClient.new(url, { version_class: version_class })
   end
 
   let(:middleware) do
@@ -72,7 +90,7 @@ describe Chef::HTTP::APIVersions do
   end
 
   context "with an unacceptable api version" do
-    let (:return_value) { "406" }
+    let(:return_value) { "406" }
     it "resets the list of supported versions" do
       Chef::ServerAPIVersions.instance.set_versions({ "min_version" => 1, "max_version" => 3 })
       run_api_version_handler

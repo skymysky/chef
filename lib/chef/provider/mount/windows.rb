@@ -16,10 +16,10 @@
 # limitations under the License.
 #
 
-require "chef/provider/mount"
-if RUBY_PLATFORM =~ /mswin|mingw32|windows/
-  require "chef/util/windows/net_use"
-  require "chef/util/windows/volume"
+require_relative "../mount"
+if RUBY_PLATFORM.match?(/mswin|mingw32|windows/)
+  require_relative "../../util/windows/net_use"
+  require_relative "../../util/windows/volume"
 end
 
 class Chef
@@ -30,7 +30,7 @@ class Chef
         provides :mount, os: "windows"
 
         def is_volume(name)
-          name =~ /^\\\\\?\\Volume\{[\w-]+\}\\$/ ? true : false
+          /^\\\\\?\\Volume\{[\w-]+\}\\$/.match?(name) ? true : false
         end
 
         def initialize(new_resource, run_context)
@@ -40,9 +40,9 @@ class Chef
 
         def load_current_resource
           if is_volume(@new_resource.device)
-            @mount = Chef::Util::Windows::Volume.new(@new_resource.name)
-          else #assume network drive
-            @mount = Chef::Util::Windows::NetUse.new(@new_resource.name)
+            @mount = Chef::Util::Windows::Volume.new(@new_resource.mount_point)
+          else # assume network drive
+            @mount = Chef::Util::Windows::NetUse.new(@new_resource.mount_point)
           end
 
           @current_resource = Chef::Resource::Mount.new(@new_resource.name)
@@ -61,13 +61,13 @@ class Chef
 
         def mount_fs
           unless @current_resource.mounted
-            @mount.add(:remote => @new_resource.device,
-                       :username => @new_resource.username,
-                       :domainname => @new_resource.domain,
-                       :password => @new_resource.password)
+            @mount.add(remote: @new_resource.device,
+                       username: @new_resource.username,
+                       domainname: @new_resource.domain,
+                       password: @new_resource.password)
             logger.trace("#{@new_resource} is mounted at #{@new_resource.mount_point}")
           else
-            logger.trace("#{@new_resource} is already mounted at #{@new_resource.mount_point}")
+            logger.debug("#{@new_resource} is already mounted at #{@new_resource.mount_point}")
           end
         end
 

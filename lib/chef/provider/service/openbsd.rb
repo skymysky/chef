@@ -16,9 +16,8 @@
 # limitations under the License.
 #
 
-require "chef/mixin/shell_out"
-require "chef/provider/service/init"
-require "chef/resource/service"
+require_relative "init"
+require_relative "../../resource/service"
 
 class Chef
   class Provider
@@ -27,12 +26,10 @@ class Chef
 
         provides :service, os: "openbsd"
 
-        include Chef::Mixin::ShellOut
-
         attr_reader :init_command, :rc_conf, :rc_conf_local, :enabled_state_found
 
-        RC_CONF_PATH = "/etc/rc.conf"
-        RC_CONF_LOCAL_PATH = "/etc/rc.conf.local"
+        RC_CONF_PATH = "/etc/rc.conf".freeze
+        RC_CONF_LOCAL_PATH = "/etc/rc.conf.local".freeze
 
         def initialize(new_resource, run_context)
           super
@@ -78,7 +75,7 @@ class Chef
         end
 
         def enable_service
-          if !is_enabled?
+          unless is_enabled?
             if is_builtin?
               if is_enabled_by_default?
                 update_rcl rc_conf_local.sub(/^#{Regexp.escape(builtin_service_enable_variable_name)}=.*/, "")
@@ -91,10 +88,10 @@ class Chef
               old_services_list = rc_conf_local.match(/^pkg_scripts="(.*)"/)
               old_services_list = old_services_list ? old_services_list[1].split(" ") : []
               new_services_list = old_services_list + [new_resource.service_name]
-              if rc_conf_local =~ /^pkg_scripts="(.*)"/
-                new_rcl = rc_conf_local.sub(/^pkg_scripts="(.*)"/, "pkg_scripts=\"#{new_services_list.join(' ')}\"")
+              if /^pkg_scripts="(.*)"/.match?(rc_conf_local)
+                new_rcl = rc_conf_local.sub(/^pkg_scripts="(.*)"/, "pkg_scripts=\"#{new_services_list.join(" ")}\"")
               else
-                new_rcl = rc_conf_local + "\n" + "pkg_scripts=\"#{new_services_list.join(' ')}\"\n"
+                new_rcl = rc_conf_local + "\n" + "pkg_scripts=\"#{new_services_list.join(" ")}\"\n"
               end
               update_rcl new_rcl
             end
@@ -116,7 +113,7 @@ class Chef
               old_list = rc_conf_local.match(/^pkg_scripts="(.*)"/)
               old_list = old_list ? old_list[1].split(" ") : []
               new_list = old_list - [new_resource.service_name]
-              update_rcl rc_conf_local.sub(/^pkg_scripts="(.*)"/, pkg_scripts = "#{new_list.join(' ')}")
+              update_rcl rc_conf_local.sub(/^pkg_scripts="(.*)"/, pkg_scripts = (new_list.join(" ")).to_s)
             end
           end
         end
@@ -132,7 +129,7 @@ class Chef
         end
 
         def update_rcl(value)
-          FileUtils.touch RC_CONF_LOCAL_PATH if !::File.exists? RC_CONF_LOCAL_PATH
+          FileUtils.touch RC_CONF_LOCAL_PATH unless ::File.exist? RC_CONF_LOCAL_PATH
           ::File.write(RC_CONF_LOCAL_PATH, value)
           @rc_conf_local = value
         end
@@ -158,7 +155,7 @@ class Chef
           result = false
           var_name = builtin_service_enable_variable_name
           if var_name
-            if rc_conf =~ /^#{Regexp.escape(var_name)}=(.*)/
+            if /^#{Regexp.escape(var_name)}=(.*)/.match?(rc_conf)
               result = true
             end
           end
@@ -170,7 +167,7 @@ class Chef
           var_name = builtin_service_enable_variable_name
           if var_name
             if m = rc_conf.match(/^#{Regexp.escape(var_name)}=(.*)/)
-              if !(m[1] =~ /"?[Nn][Oo]"?/)
+              unless /"?[Nn][Oo]"?/.match?(m[1])
                 result = true
               end
             end
@@ -186,12 +183,12 @@ class Chef
             if var_name
               if m = rc_conf_local.match(/^#{Regexp.escape(var_name)}=(.*)/)
                 @enabled_state_found = true
-                if !(m[1] =~ /"?[Nn][Oo]"?/) # e.g. looking for httpd_flags=NO
+                unless /"?[Nn][Oo]"?/.match?(m[1]) # e.g. looking for httpd_flags=NO
                   result = true
                 end
               end
             end
-            if !@enabled_state_found
+            unless @enabled_state_found
               result = is_enabled_by_default?
             end
           else

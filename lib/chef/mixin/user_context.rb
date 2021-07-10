@@ -1,6 +1,6 @@
 #
 # Author:: Adam Edwards (<adamed@chef.io>)
-# Copyright:: Copyright (c) 2016 Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
 # limitations under the License.
 #
 
-require "chef/util/windows/logon_session" if Chef::Platform.windows?
+require_relative "../util/windows/logon_session" if ChefUtils.windows?
 
 class Chef
   module Mixin
@@ -26,11 +26,11 @@ class Chef
       # When authentication = :local, we use the credentials to create a logon session against the local system, and then try to access the files.
       # When authentication = :remote, we continue with the current user but pass the provided credentials to the remote system.
       def with_user_context(user, password, domain = nil, authentication = :remote, &block)
-        unless Chef::Platform.windows?
+        unless ChefUtils.windows?
           raise Exceptions::UnsupportedPlatform, "User context impersonation is supported only on the Windows platform"
         end
 
-        if ! block_given?
+        unless block_given?
           raise ArgumentError, "You must supply a block to `with_user_context`"
         end
 

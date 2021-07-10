@@ -16,10 +16,10 @@
 # limitations under the License.
 #
 
-require "chef/util/windows"
-require "chef/win32/net"
+require_relative "../windows"
+require_relative "../../win32/net"
 
-#wrapper around a subset of the NetGroup* APIs.
+# wrapper around a subset of the NetGroup* APIs.
 class Chef::Util::Windows::NetGroup
 
   private
@@ -54,6 +54,12 @@ class Chef::Util::Windows::NetGroup
 
   def local_add_members(members)
     Chef::ReservedNames::Win32::NetUser.net_local_group_add_members(nil, groupname, members)
+  rescue Chef::Exceptions::Win32APIError => e
+    raise ArgumentError, e
+  end
+
+  def local_group_set_info(comment)
+    Chef::ReservedNames::Win32::NetUser.net_local_group_set_info(nil, groupname, comment)
   rescue Chef::Exceptions::Win32APIError => e
     raise ArgumentError, e
   end

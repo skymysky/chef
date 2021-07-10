@@ -1,6 +1,6 @@
 #
 # Author:: Adam Edwards (<adamed@chef.io>)
-# Copyright:: Copyright 2014-2016, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -41,7 +41,7 @@ describe Chef::Resource::DscResource do
     end
 
     it "has an ed_actions property with only the `:run` and `:nothing` properties" do
-      expect(dsc_test_resource.allowed_actions.to_set).to eq([:run, :nothing].to_set)
+      expect(dsc_test_resource.allowed_actions.to_set).to eq(%i{run nothing}.to_set)
     end
 
     it "allows the resource property to be set" do
@@ -93,7 +93,7 @@ describe Chef::Resource::DscResource do
       end
     end
 
-    context "Powershell DSL methods" do
+    context "PowerShell DSL methods" do
       it "responds to :ps_credential" do
         expect(dsc_test_resource.respond_to?(:ps_credential)).to be true
       end

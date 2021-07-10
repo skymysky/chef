@@ -1,6 +1,6 @@
 #
 # Author:: Adam Edwards (<adamed@chef.io>)
-# Copyright:: Copyright 2013-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,24 +19,24 @@
 require "spec_helper"
 
 describe Chef::Resource::Batch do
-  let(:node) { Chef::Node.new }
 
-  before(:each) do
-    node.default["kernel"] = Hash.new
+  let(:resource) do
+    node = Chef::Node.new
+    node.default["kernel"] = {}
     node.default["kernel"][:machine] = :x86_64.to_s
     node.automatic[:os] = "windows"
 
     run_context = Chef::RunContext.new(node, nil, nil)
-    @resource = Chef::Resource::Batch.new("batch_unit_test", run_context)
+    Chef::Resource::Batch.new("batch_unit_test", run_context)
   end
 
   it "creates a new Chef::Resource::Batch" do
-    expect(@resource).to be_a_kind_of(Chef::Resource::Batch)
+    expect(resource).to be_a_kind_of(Chef::Resource::Batch)
   end
 
   context "windows script" do
-    let(:resource_instance) { @resource }
-    let(:resource_instance_name ) { @resource.command }
+    let(:windows_script_resource) { resource }
+    let(:resource_instance_name ) { resource.command }
     let(:resource_name) { :batch }
     let(:interpreter_file_name) { "cmd.exe" }
 

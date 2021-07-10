@@ -1,5 +1,5 @@
 #
-# Copyright:: Copyright 2018, Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,6 +58,12 @@ describe Chef::Resource::RhsmRepo do
     context "when the repo provided does not match the output" do
       it "returns false" do
         expect(provider.repo_enabled?("differentrepo")).to eq(false)
+      end
+    end
+
+    context "when user pass wildcard" do
+      it "returns true" do
+        expect(provider.repo_enabled?("*")).to eq(true)
       end
     end
   end

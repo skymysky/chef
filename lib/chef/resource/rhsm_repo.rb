@@ -1,5 +1,5 @@
 #
-# Copyright:: 2015-2018 Chef Software, Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,37 +15,50 @@
 # limitations under the License.
 #
 
-require "chef/resource"
+require_relative "../resource"
 
 class Chef
   class Resource
     class RhsmRepo < Chef::Resource
-      resource_name :rhsm_repo
+      unified_mode true
+
       provides(:rhsm_repo) { true }
 
-      description "Use the rhsm_repo resource to enable or disable Red Hat Subscription Manager"\
-                  " repositories that are made available via attached subscriptions."
+      description "Use the **rhsm_repo** resource to enable or disable Red Hat Subscription Manager repositories that are made available via attached subscriptions."
       introduced "14.0"
+      examples <<~DOC
+        **Enable an RHSM repository**
+
+        ```ruby
+        rhsm_repo 'rhel-7-server-extras-rpms'
+        ```
+
+        **Disable an RHSM repository**
+
+        ```ruby
+        rhsm_repo 'rhel-7-server-extras-rpms' do
+          action :disable
+        end
+        ```
+      DOC
 
       property :repo_name, String,
-               description: "An optional property for specifying the repository name if not using the resource's name.",
-               name_property: true
+        description: "An optional property for specifying the repository name if it differs from the resource block's name.",
+        name_property: true
 
-      action :enable do
-        description "Enable a RHSM repository"
-
+      action :enable, description: "Enable a RHSM repository." do
         execute "Enable repository #{new_resource.repo_name}" do
           command "subscription-manager repos --enable=#{new_resource.repo_name}"
+          default_env true
           action :run
           not_if { repo_enabled?(new_resource.repo_name) }
         end
       end
 
-      action :disable do
-        description "Disable a RHSM repository"
-
+      action :disable, description: "Disable a RHSM repository." do
         execute "Enable repository #{new_resource.repo_name}" do
           command "subscription-manager repos --disable=#{new_resource.repo_name}"
+          default_env true
           action :run
           only_if { repo_enabled?(new_resource.repo_name) }
         end
@@ -53,9 +66,10 @@ class Chef
 
       action_class do
         def repo_enabled?(repo)
+          # FIXME: use shell_out()
           cmd = Mixlib::ShellOut.new("subscription-manager repos --list-enabled", env: { LANG: "en_US" })
           cmd.run_command
-          !cmd.stdout.match(/Repo ID:\s+#{repo}$/).nil?
+          repo == "*" || !cmd.stdout.match(/Repo ID:\s+#{repo}$/).nil?
         end
       end
     end

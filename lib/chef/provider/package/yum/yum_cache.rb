@@ -1,6 +1,6 @@
 
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,13 +16,13 @@
 # limitations under the License.
 #
 
-require "chef/provider/package/yum/python_helper"
-require "chef/provider/package"
-require "singleton"
+require_relative "python_helper"
+require_relative "../../package"
+require "singleton" unless defined?(Singleton)
 
 #
 # These are largely historical APIs, the YumCache object no longer exists and this is a
-# fascade over the python helper class.  It should be considered deprecated-lite and
+# facade over the python helper class.  It should be considered deprecated-lite and
 # no new APIs should be added and should be added to the python_helper instead.
 #
 

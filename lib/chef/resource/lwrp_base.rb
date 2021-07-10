@@ -2,7 +2,7 @@
 # Author:: Adam Jacob (<adam@chef.io>)
 # Author:: Christopher Walters (<cw@chef.io>)
 # Author:: Daniel DeLeo (<dan@chef.io>)
-# Copyright:: Copyright 2008-2018, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,14 +18,15 @@
 # limitations under the License.
 #
 
-require "chef/resource"
-require "chef/resource_resolver"
-require "chef/node"
-require "chef/log"
-require "chef/exceptions"
-require "chef/mixin/convert_to_class_name"
-require "chef/mixin/from_file"
-require "chef/mixin/params_validate" # for DelayedEvaluator
+require_relative "../resource"
+require_relative "../resource_resolver"
+require_relative "../node"
+require_relative "../log"
+require_relative "../exceptions"
+require_relative "../mixin/convert_to_class_name"
+require_relative "../mixin/from_file"
+require_relative "../mixin/params_validate" # for DelayedEvaluator
+require_relative "../version"
 
 class Chef
   class Resource
@@ -36,7 +37,7 @@ class Chef
     class LWRPBase < Resource
 
       # Class methods
-      class <<self
+      class << self
 
         include Chef::Mixin::ConvertToClassName
         include Chef::Mixin::FromFile
@@ -49,11 +50,13 @@ class Chef
 
           resource_name = filename_to_qualified_string(cookbook_name, filename)
 
-          # We load the class first to give it a chance to set its own name
           resource_class = Class.new(self)
-          resource_class.resource_name resource_name.to_sym
           resource_class.run_context = run_context
           resource_class.class_from_file(filename)
+
+          if !resource_class.unified_mode && !deprecated_class(resource_class)
+            Chef.deprecated :unified_mode, "The #{resource_class.resource_name} resource in the #{cookbook_name} cookbook should declare `unified_mode true`", filename
+          end
 
           # Make a useful string for the class (rather than <Class:312894723894>)
           resource_class.instance_eval do
@@ -65,12 +68,14 @@ class Chef
 
           Chef::Log.trace("Loaded contents of #{filename} into resource #{resource_name} (#{resource_class})")
 
-          LWRPBase.loaded_lwrps[filename] = true
+          # wire up the default resource name after the class is parsed only if we haven't declared one.
+          # (this ordering is important for MapCollision deprecation warnings)
+          resource_class.provides resource_name.to_sym unless Chef::ResourceResolver.includes_handler?(resource_name.to_sym, self)
+
+          LWRPBase.loaded_lwrps[filename] = resource_class
 
           resource_class
         end
-
-        alias :attribute :property
 
         # Adds +action_names+ to the list of valid actions for this resource.
         # Does not include superclass's action list when appending.
@@ -86,7 +91,7 @@ class Chef
 
         # @deprecated
         def valid_actions(*args)
-          Chef::Log.warn("`valid_actions' is deprecated, please use allowed_actions `instead'!")
+          Chef::Log.warn("`valid_actions` is deprecated, please use `allowed_actions` instead!")
           allowed_actions(*args)
         end
 
@@ -101,6 +106,7 @@ class Chef
         protected
 
         attr_writer :loaded_lwrps
+
         def loaded_lwrps
           @loaded_lwrps ||= {}
         end
@@ -113,7 +119,22 @@ class Chef
         # +default_action+ and other DSL-y methods when extending LWRP::Base.
         def from_superclass(m, default = nil)
           return default if superclass == Chef::Resource::LWRPBase
+
           superclass.respond_to?(m) ? superclass.send(m) : default
+        end
+
+        # Return true if the resource has been deprecated on this version.
+        #
+        # XXX: for now we only look at chef_version_for_provides, reversing the
+        # resource node_map to determine if the resource provides anything which is
+        # wired up is difficult.
+        #
+        def deprecated_class(resource_class)
+          if resource_class.chef_version_for_provides && Chef::VERSION !~ resource_class.chef_version_for_provides
+            return true
+          end
+
+          false
         end
       end
     end

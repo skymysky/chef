@@ -1,6 +1,6 @@
 #
 # Author:: Adam Jacob (<adam@chef.io>)
-# Copyright:: Copyright 2008-2016, Chef Software Inc.
+# Copyright:: Copyright (c) Chef Software Inc.
 # License:: Apache License, Version 2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,11 +53,11 @@ describe Chef::Resource::GemPackage, "gem_binary" do
   end
 end
 
-describe Chef::Resource::GemPackage, "clear_gem_sources" do
+describe Chef::Resource::GemPackage, "clear_sources" do
   let(:resource) { Chef::Resource::GemPackage.new("foo") }
 
-  it "is false by default" do
-    expect(resource.clear_sources).to be false
+  it "is nil by default" do
+    expect(resource.clear_sources).to be_nil
   end
 
   it "sets the default of clear_sources to the config value" do

@@ -1,11 +1,11 @@
-require "chef/chef_fs/data_handler/data_handler_base"
-require "chef/data_bag_item"
+require_relative "data_handler_base"
+require_relative "../../data_bag_item"
 
 class Chef
   module ChefFS
     module DataHandler
       class DataBagItemDataHandler < DataHandlerBase
-        RESERVED_NAMES = /^(node|role|environment|client)$/
+        RESERVED_NAMES = /^(node|role|environment|client)$/.freeze
 
         def normalize(data_bag_item, entry)
           # If it's wrapped with raw_data, unwrap it.
@@ -54,8 +54,8 @@ class Chef
         def verify_integrity(object, entry)
           base_name = remove_dot_json(entry.name)
           if object["raw_data"]["id"] != base_name
-            yield("ID in #{entry.path_for_printing} must be '#{base_name}' (is '#{object['raw_data']['id']}')")
-          elsif entry.parent.name =~ RESERVED_NAMES
+            yield("ID in #{entry.path_for_printing} must be '#{base_name}' (is '#{object["raw_data"]["id"]}')")
+          elsif RESERVED_NAMES.match?(entry.parent.name)
             yield("Data bag name ('#{entry.parent.name}') must not match #{RESERVED_NAMES.inspect}")
           end
         end
